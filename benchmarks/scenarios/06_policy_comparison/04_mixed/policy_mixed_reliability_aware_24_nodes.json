@@ -1,0 +1,43 @@
+{
+  "name": "policy_mixed_reliability_aware_24_nodes",
+  "seed": 42,
+  "num_nodes": 24,
+  "rounds": 3,
+  "network_latency_ms": [50, 150],
+  "dropout_rate": 0.0,
+  "routing_policy": "reliability_aware",
+  "entry_node_strategy": "round_robin",
+  "query_capability": [
+    {
+      "name": "math_creative_general",
+      "prompt": "Design a creative math puzzle and explain its solution briefly.",
+      "required_capabilities": {
+        "math": 0.6,
+        "creative": 0.5,
+        "general": 0.4
+      }
+    },
+    {
+      "name": "programming_planning",
+      "prompt": "Plan and sketch a small Python implementation for a feature.",
+      "required_capabilities": {
+        "programming": 0.8,
+        "planning": 0.5
+      }
+    },
+    {
+      "name": "research_summary_writing",
+      "prompt": "Summarize evidence for a technical option in a clear style.",
+      "required_capabilities": {
+        "research": 0.7,
+        "summarization": 0.6,
+        "writing": 0.4
+      }
+    }
+  ],
+  "queries_per_capability": 5,
+  "top_k": 3,
+  "warmup_s": 12,
+  "startup_timeout_s": 90,
+  "query_timeout_s": 150
+}

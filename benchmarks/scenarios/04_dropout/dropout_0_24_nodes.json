@@ -1,0 +1,29 @@
+{
+  "name": "dropout_0_24_nodes",
+  "seed": 42,
+  "num_nodes": 24,
+  "rounds": 3,
+  "network_latency_ms": [50, 150],
+  "dropout_rate": 0.0,
+  "dropout_settle_s": 2,
+  "routing_policy": "current",
+  "entry_node_strategy": "round_robin",
+  "query_capability": [
+    "general",
+    "math",
+    "programming",
+    "writing",
+    "summarization",
+    "research",
+    "planning",
+    "creative"
+  ],
+  "queries_per_capability": 5,
+  "top_k": 3,
+  "warmup_s": 12,
+  "startup_timeout_s": 60,
+  "query_timeout_s": 120
+}
+
+
+
