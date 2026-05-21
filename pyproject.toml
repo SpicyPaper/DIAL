@@ -23,4 +23,5 @@ dev = [
     "nbformat>=5.10.4",
     "pandas>=3.0.3",
     "plotly>=6.7.0",
+    "tecto>=0.16.9",
 ]
