@@ -9,7 +9,7 @@ from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_SCENARIOS_ROOT = PROJECT_ROOT / "benchmarks" / "scenarios"
-DEFAULT_OUTPUT_DIR = PROJECT_ROOT / ".runtime" / "benchmarks"
+DEFAULT_OUTPUT_DIR = PROJECT_ROOT / "benchmarks" / "output"
 
 
 def main() -> None:

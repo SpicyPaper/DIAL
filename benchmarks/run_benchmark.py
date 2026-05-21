@@ -67,7 +67,7 @@ def main() -> None:
     )
     parser.add_argument(
         "--output-dir",
-        default=".runtime/benchmarks",
+        default="benchmarks/output",
         help="Directory where run outputs are written.",
     )
     parser.add_argument(
