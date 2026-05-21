@@ -209,9 +209,13 @@ __marimo__/
 ## Custom
 
 .runtime/
+
 benchmarks/output/
-.uv-cache/
+
 .tectonic-cache/
+
+outputs/
+
 report/*.aux
 report/*-blx.bib
 report/*.bbl
