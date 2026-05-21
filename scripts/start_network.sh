@@ -95,6 +95,7 @@ fi
 
 # Capability pool.
 CAPS_POOL=(
+  "general"
   "math"
   "programming"
   "writing"
@@ -267,7 +268,7 @@ for ((i=1; i<NUM_NODES; i++)); do
   PORT=$((BASE_PORT + i))
   API_PORT=$((API_BASE_PORT + i))
   SEED=$((1000 + i))
-  PRIMARY_CAP="${CAPS_POOL[$(((i - 1) % ${#CAPS_POOL[@]}))]}"
+  PRIMARY_CAP="${CAPS_POOL[$((i % ${#CAPS_POOL[@]}))]}"
   CAP="$PRIMARY_CAP"
   MODEL="node-${i}-${PRIMARY_CAP}"
 
