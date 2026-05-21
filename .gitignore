@@ -208,4 +208,17 @@ __marimo__/
 
 ## Custom
 
-.runtime
+.runtime/
+benchmarks/output/
+.uv-cache/
+.tectonic-cache/
+report/*.aux
+report/*-blx.bib
+report/*.bbl
+report/*.bcf
+report/*.blg
+report/*.log
+report/*.out
+report/*.run.xml
+report/*.toc
+report/*.xdv
