@@ -42,6 +42,23 @@ def configure_from_env(args) -> None:
     args.query_connect_timeout = env_float("QUERY_CONNECT_TIMEOUT")
     args.classifier_timeout = env_float("CLASSIFIER_TIMEOUT")
     args.api_host = require_env("API_HOST")
+    args.routing_policy = optional_env("ROUTING_POLICY", "current")
+    args.benchmark_mode = optional_env("BENCHMARK_MODE", "false").lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+    args.benchmark_network_latency_min_ms = float(
+        optional_env("BENCHMARK_NETWORK_LATENCY_MIN_MS", "0")
+    )
+    args.benchmark_network_latency_max_ms = float(
+        optional_env("BENCHMARK_NETWORK_LATENCY_MAX_MS", "0")
+    )
+    args.benchmark_node_network_extra_latency_ms = float(
+        optional_env("BENCHMARK_NODE_NETWORK_EXTRA_LATENCY_MS", "0")
+    )
+    args.benchmark_seed = int(optional_env("BENCHMARK_SEED", "42"))
 
     if (
         args.agent_backend == "local"
@@ -188,6 +205,14 @@ async def async_main(args):
         classifier_timeout=args.classifier_timeout,
         query_timeout=args.query_timeout,
         query_connect_timeout=args.query_connect_timeout,
+        routing_policy=args.routing_policy,
+        benchmark_mode=args.benchmark_mode,
+        benchmark_network_latency_min_ms=args.benchmark_network_latency_min_ms,
+        benchmark_network_latency_max_ms=args.benchmark_network_latency_max_ms,
+        benchmark_node_network_extra_latency_ms=(
+            args.benchmark_node_network_extra_latency_ms
+        ),
+        benchmark_seed=args.benchmark_seed,
     )
 
     await node.run_forever(

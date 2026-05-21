@@ -1,8 +1,11 @@
 import json
 import re
+from typing import TYPE_CHECKING
 
-from src.local_agent import LocalAgent, OllamaAgent
 from src.logging_utils import log
+
+if TYPE_CHECKING:
+    from src.local_agent import LocalAgent
 
 CAPABILITIES = [
     "general",
@@ -62,18 +65,23 @@ class CapabilityClassifier:
         model: str = "qwen3:1.7b",
         host: str = "http://localhost:11434",
         timeout_s: float = 60.0,
-        agent: LocalAgent | None = None,
+        agent: "LocalAgent | None" = None,
     ) -> None:
-        self.agent = agent or OllamaAgent(
-            model=model,
-            host=host,
-            timeout_s=timeout_s,
-            system_prompt=CLASSIFIER_SYSTEM_PROMPT,
-            num_predict=192,
-            temperature=0.0,
-            think=False,
-            response_format=CLASSIFIER_JSON_SCHEMA,
-        )
+        if agent is None:
+            from src.local_agent import OllamaAgent
+
+            agent = OllamaAgent(
+                model=model,
+                host=host,
+                timeout_s=timeout_s,
+                system_prompt=CLASSIFIER_SYSTEM_PROMPT,
+                num_predict=192,
+                temperature=0.0,
+                think=False,
+                response_format=CLASSIFIER_JSON_SCHEMA,
+            )
+
+        self.agent = agent
 
     async def classify_scores(self, prompt: str) -> dict[str, float]:
         raw = await self.agent.generate(

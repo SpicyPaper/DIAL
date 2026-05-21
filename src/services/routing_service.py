@@ -12,6 +12,7 @@ from src.services.health_service import HealthService
 from src.services.capability_classifier import CAPABILITIES, CapabilityClassifier
 from src.services.profile_service import ProfileService
 from src.services.recommendation_service import RecommendationService
+from src.services.routing_policy import RoutingPolicy, get_routing_policy
 
 MIN_ROUTING_SCORE_THRESHOLD = 0.65
 DHT_DISCOVERY_MIN_DEMAND = 0.3
@@ -54,6 +55,7 @@ class RoutingService:
         health_service: HealthService | None = None,
         capability_classifier: CapabilityClassifier | None = None,
         recommendation_service: RecommendationService | None = None,
+        routing_policy: RoutingPolicy | str | None = None,
     ) -> None:
         self.host = host
         self.local_profile = local_profile
@@ -64,6 +66,10 @@ class RoutingService:
         self.live_ttl_ms = live_ttl_ms
         self.capability_classifier = capability_classifier
         self.recommendation_service = recommendation_service
+        if isinstance(routing_policy, RoutingPolicy):
+            self.routing_policy = routing_policy
+        else:
+            self.routing_policy = get_routing_policy(routing_policy)
 
     async def refresh_candidates_from_dht(self, capability: str) -> None:
         """
@@ -306,6 +312,7 @@ class RoutingService:
             "recommendation_status": "",
             "recommendation_reason": "",
             "selection_reason": "",
+            "routing_policy": self.routing_policy.name,
             "stages": [],
         }
 
@@ -826,33 +833,34 @@ class RoutingService:
             if status.last_rtt_ms is not None:
                 latency_score = min(status.last_rtt_ms / 1000.0, 1.0)
 
+        policy = self.routing_policy
         routing_score = (
-            0.75 * weighted_quality
-            + 0.15 * freshness_score
-            - 0.07 * failure_score
-            - 0.08 * latency_score
+            policy.quality_weight * weighted_quality
+            + policy.freshness_weight * freshness_score
+            + policy.failure_weight * failure_score
+            + policy.latency_weight * latency_score
         )
         routing_score = max(0.0, min(1.0, routing_score))
         score_breakdown = {
             "capability_match": {
                 "value": round(weighted_quality, 4),
-                "weight": 0.75,
-                "contribution": round(0.75 * weighted_quality, 4),
+                "weight": policy.quality_weight,
+                "contribution": round(policy.quality_weight * weighted_quality, 4),
             },
             "fresh_profile": {
                 "value": round(freshness_score, 4),
-                "weight": 0.15,
-                "contribution": round(0.15 * freshness_score, 4),
+                "weight": policy.freshness_weight,
+                "contribution": round(policy.freshness_weight * freshness_score, 4),
             },
             "recent_failures": {
                 "value": round(failure_score, 4),
-                "weight": -0.07,
-                "contribution": round(-0.07 * failure_score, 4),
+                "weight": policy.failure_weight,
+                "contribution": round(policy.failure_weight * failure_score, 4),
             },
             "latency": {
                 "value": round(latency_score, 4),
-                "weight": -0.08,
-                "contribution": round(-0.08 * latency_score, 4),
+                "weight": policy.latency_weight,
+                "contribution": round(policy.latency_weight * latency_score, 4),
             },
         }
 
@@ -864,7 +872,7 @@ class RoutingService:
             f"weighted_quality={weighted_quality:.2f} "
             f"freshness={freshness_score:.2f} "
             f"failure={failure_score:.2f} latency={latency_score:.2f} "
-            f"routing_score={routing_score:.2f}",
+            f"policy={policy.name} routing_score={routing_score:.2f}",
         )
 
         return routing_score, weighted_quality, score_breakdown

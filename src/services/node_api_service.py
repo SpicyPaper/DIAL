@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import time
 from threading import Lock
+from typing import TYPE_CHECKING
 
 import uvicorn
 import trio
@@ -11,7 +12,9 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from src.logging_utils import log
-from src.node import Node
+
+if TYPE_CHECKING:
+    from src.node import Node
 
 
 class NodeQueryRequest(BaseModel):
@@ -40,6 +43,12 @@ class NodeAPIService:
             methods=["GET"],
             response_model=None,
         )
+        self.app.add_api_route(
+            "/api/profile",
+            self.profile,
+            methods=["GET"],
+            response_model=None,
+        )
 
     async def run(self) -> None:
         config = uvicorn.Config(
@@ -56,6 +65,7 @@ class NodeAPIService:
             "HTTP",
             f"Progress endpoint: GET http://{self.host}:{self.port}/api/query/progress/<query_id>",
         )
+        log("HTTP", f"Profile endpoint: GET http://{self.host}:{self.port}/api/profile")
         try:
             await trio.to_thread.run_sync(server.run, abandon_on_cancel=True)
         finally:
@@ -125,3 +135,13 @@ class NodeAPIService:
             "events": events,
             "latest": events[-1] if events else None,
         }
+
+    async def profile(self):
+        try:
+            return self.node.benchmark_profile_from_api()
+        except Exception as exc:
+            log("HTTP", f"Profile failed: {exc}")
+            return JSONResponse(
+                {"error": str(exc)},
+                status_code=500,
+            )

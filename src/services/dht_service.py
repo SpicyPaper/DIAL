@@ -8,6 +8,7 @@ from libp2p.tools.async_service import background_trio_service
 
 from src.logging_utils import log
 from src.models import NodeProfile
+from src.benchmark_simulator import BenchmarkNetworkSimulator
 
 
 DHT_OPERATION_TIMEOUT_S = 30.0
@@ -20,9 +21,15 @@ class DHTService:
     - finding providers for a capability
     """
 
-    def __init__(self, host: IHost, mode: DHTMode = DHTMode.SERVER) -> None:
+    def __init__(
+        self,
+        host: IHost,
+        mode: DHTMode = DHTMode.SERVER,
+        benchmark_simulator: BenchmarkNetworkSimulator | None = None,
+    ) -> None:
         self.host = host
         self.mode = mode
+        self.benchmark_simulator = benchmark_simulator
         self.dht = KadDHT(host, mode, enable_random_walk=(mode == DHTMode.SERVER))
 
     def capability_key(self, capability: str) -> str:
@@ -76,6 +83,8 @@ class DHTService:
             ok = False
 
             with trio.move_on_after(timeout_s) as cancel_scope:
+                if self.benchmark_simulator is not None:
+                    await self.benchmark_simulator.wait("dht.advertise_capability")
                 ok = await self.dht.provide(key)
 
             if cancel_scope.cancelled_caught:
@@ -101,6 +110,8 @@ class DHTService:
         providers = []
 
         with trio.move_on_after(timeout_s) as cancel_scope:
+            if self.benchmark_simulator is not None:
+                await self.benchmark_simulator.wait("dht.find_capability_providers")
             providers = await self.dht.find_providers(key)
 
         if cancel_scope.cancelled_caught:

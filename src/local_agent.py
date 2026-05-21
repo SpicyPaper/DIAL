@@ -1,13 +1,7 @@
 import trio
 import json
-import urllib.error
-import urllib.request
-
-from transformers import AutoModelForCausalLM, AutoTokenizer
 
 from abc import ABC, abstractmethod
-
-from src.ollama_utils import OllamaError, ollama_generate_url
 
 
 class LocalAgent(ABC):
@@ -51,6 +45,8 @@ class LocalTransformersAgent(LocalAgent):
         self.top_k = top_k
         self.enable_thinking = enable_thinking
         self.timeout_s = timeout_s
+
+        from transformers import AutoModelForCausalLM, AutoTokenizer
 
         self.tokenizer = tokenizer or AutoTokenizer.from_pretrained(model_id)
         self.model = model or AutoModelForCausalLM.from_pretrained(
@@ -125,6 +121,8 @@ class OllamaAgent(LocalAgent):
         think: bool = False,
         response_format: str | dict | None = None,
     ) -> None:
+        from src.ollama_utils import ollama_generate_url
+
         self.model = model
         self.host = host.rstrip("/")
         self.url = ollama_generate_url(host)
@@ -140,6 +138,11 @@ class OllamaAgent(LocalAgent):
         return await trio.to_thread.run_sync(self._generate_sync, prompt)
 
     def _generate_sync(self, prompt: str) -> str:
+        import urllib.error
+        import urllib.request
+
+        from src.ollama_utils import OllamaError
+
         payload = {
             "model": self.model,
             "prompt": prompt,
@@ -247,6 +250,9 @@ class AIAssAgent(LocalAgent):
             ) from exc
 
     def _generate_sync(self, prompt: str) -> str:
+        import urllib.error
+        import urllib.request
+
         if not self.api_key:
             raise RuntimeError(
                 "AIaaS API key is missing. Set AIASS_API_KEY or pass --aiass-api-key."

@@ -26,10 +26,10 @@ from src.services.dht_service import DHTService
 from src.services.health_service import HealthService
 from src.services.ping_service import PingService
 from src.services.profile_service import ProfileService
-from src.services.pubsub_service import PubSubService
 from src.services.query_service import QueryService
 from src.services.routing_service import RoutingService
 from src.services.recommendation_service import RecommendationService
+from src.services.routing_policy import get_routing_policy
 from src.services.capability_classifier import (
     CAPABILITIES,
     CLASSIFIER_SYSTEM_PROMPT,
@@ -37,6 +37,10 @@ from src.services.capability_classifier import (
 )
 from src.services.capability_scorer import CapabilityScorer
 from src.transport import TransportService
+from src.benchmark_simulator import (
+    BenchmarkNetworkConfig,
+    BenchmarkNetworkSimulator,
+)
 
 
 CAPABILITY_ADVERTISE_INTERVAL_S = 30 * 60.0
@@ -123,6 +127,12 @@ class Node:
         classifier_timeout: float = 60.0,
         query_timeout: float = 60.0,
         query_connect_timeout: float = 3.0,
+        routing_policy: str = "current",
+        benchmark_mode: bool = False,
+        benchmark_network_latency_min_ms: float = 0.0,
+        benchmark_network_latency_max_ms: float = 0.0,
+        benchmark_node_network_extra_latency_ms: float = 0.0,
+        benchmark_seed: int = 42,
     ) -> None:
         self.port = port if port > 0 else find_free_port()
         # List of addresses from which the host will accept incoming connection
@@ -146,6 +156,7 @@ class Node:
         self.classifier_timeout = classifier_timeout
         self.query_timeout = query_timeout
         self.query_connect_timeout = query_connect_timeout
+        self.routing_policy = get_routing_policy(routing_policy)
         self._capability_scored = False
 
         # Seed is useful for tests
@@ -157,7 +168,16 @@ class Node:
             secret = secrets.token_bytes(32)
 
         self.host = new_host(key_pair=create_new_key_pair(secret))
-        self.transport = TransportService()
+        benchmark_config = BenchmarkNetworkConfig(
+            enabled=benchmark_mode,
+            latency_min_ms=benchmark_network_latency_min_ms,
+            latency_max_ms=benchmark_network_latency_max_ms,
+            node_extra_latency_ms=benchmark_node_network_extra_latency_ms,
+            seed=benchmark_seed,
+            node_id=self.host.get_id().to_string(),
+        )
+        self.benchmark_simulator = BenchmarkNetworkSimulator(benchmark_config)
+        self.transport = TransportService(self.benchmark_simulator)
 
         advertised_capabilities, resolved_scores = self.resolve_profile_capabilities(
             advertised_capabilities,
@@ -214,7 +234,11 @@ class Node:
             self.current_local_profile,
         )
 
-        self.dht_service = DHTService(self.host, mode=dht_mode)
+        self.dht_service = DHTService(
+            self.host,
+            mode=dht_mode,
+            benchmark_simulator=self.benchmark_simulator,
+        )
 
         self.health_service = HealthService(
             self.peer_registry,
@@ -286,6 +310,7 @@ class Node:
             self.health_service,
             capability_classifier,
             self.recommendation_service,
+            self.routing_policy,
         )
 
         self.query_service = QueryService(
@@ -302,6 +327,8 @@ class Node:
         self.api_url: str | None = None
 
         if self.enable_gossip:
+            from src.services.pubsub_service import PubSubService
+
             self.pubsub_service = PubSubService(
                 self.host,
                 self.profile_service,
@@ -427,6 +454,11 @@ class Node:
         log("NODE", f"Advertise address mode: {self.advertise_address_mode}")
         log("NODE", f"Peer query response timeout: {self.query_timeout:.0f}s")
         log("NODE", f"Peer query connect timeout: {self.query_connect_timeout:.0f}s")
+        log("ROUTING", f"Routing policy: {self.routing_policy.name}")
+        log(
+            "BENCH",
+            f"Benchmark network simulator: {self.benchmark_simulator.describe()}",
+        )
         if self.api_url is not None:
             log("NODE", f"HTTP API: {self.api_url}")
             log("NODE", f"HTTP query endpoint: POST {self.api_url}/api/query")
@@ -609,3 +641,46 @@ class Node:
             progress_callback,
             trio_token=self._trio_token,
         )
+
+    def benchmark_profile_from_api(self) -> dict:
+        known_peers = []
+        for profile in self.peer_registry.all_profiles():
+            status = self.peer_registry.get_status(profile.peer_id)
+            known_peers.append(
+                {
+                    "peer_id": profile.peer_id,
+                    "addresses": profile.addresses,
+                    "model_name": profile.model_name,
+                    "advertised_capabilities": profile.advertised_capabilities,
+                    "capability_scores": profile.capability_scores,
+                    "is_available": profile.is_available,
+                    "status": {
+                        "is_alive": status.is_alive if status is not None else False,
+                        "last_rtt_ms": (
+                            status.last_rtt_ms if status is not None else None
+                        ),
+                        "consecutive_failures": (
+                            status.consecutive_failures
+                            if status is not None
+                            else 0
+                        ),
+                        "last_checked_ts_ms": (
+                            status.last_checked_ts_ms
+                            if status is not None
+                            else None
+                        ),
+                    },
+                }
+            )
+
+        return {
+            "peer_id": self.local_profile.peer_id,
+            "addresses": self.local_profile.addresses,
+            "model_name": self.local_profile.model_name,
+            "advertised_capabilities": self.local_profile.advertised_capabilities,
+            "capability_scores": self.local_profile.capability_scores,
+            "is_available": self.local_profile.is_available,
+            "routing_policy": self.routing_policy.name,
+            "benchmark_network": self.benchmark_simulator.describe(),
+            "known_peers": known_peers,
+        }
