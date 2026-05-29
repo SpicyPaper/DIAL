@@ -2,8 +2,8 @@
 set -euo pipefail
 
 # Usage:
-#   ./scripts/query_any.sh 0 "do some math please"
-#   ./scripts/query_any.sh 3 "write some python code"
+#   ./scripts/query_node_via_libp2p.sh 0 "do some math please"
+#   ./scripts/query_node_via_libp2p.sh 3 "write some python code"
 
 if [ "$#" -lt 2 ]; then
   echo "Usage: $0 <node_index> <prompt>"
@@ -42,6 +42,6 @@ if [[ "$ENTRY_ADDR" == *"<unknown-yet>"* ]]; then
   exit 1
 fi
 
-python -m src.cli.client_query \
+python -m src.cli.query_via_libp2p \
   --entry-node "$ENTRY_ADDR" \
   --prompt "$PROMPT"

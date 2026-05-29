@@ -1,10 +1,10 @@
 """
-Thin one-shot client.
+One-shot libp2p query client.
 
 This client is NOT a network node.
 It only:
 - starts a temporary host
-- connects to one known entry node
+- connects to one selected entry node
 - opens one /tsadai/query/1.0.0 stream
 - sends one query
 - waits for one response
@@ -117,7 +117,7 @@ def main():
         sys.exit(1)
 
     parser = argparse.ArgumentParser(
-        description="Send one query to the network through one entry node."
+        description="Send one query to the network through a libp2p query stream."
     )
     parser.add_argument(
         "--entry-node",

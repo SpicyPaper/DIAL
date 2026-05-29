@@ -1,3 +1,7 @@
+"""
+Minimal libp2p echo protocol demo for development experiments.
+"""
+
 import argparse
 import logging
 import random
@@ -88,8 +92,8 @@ async def run(port: int, destination: str, seed: int | None = None) -> None:
             optimal_addr_with_peer = f"{optimal_addr}/p2p/{peer_id}"
 
             print(
-                "\nRun this from the same folder in another console:\n\n"
-                f"echo-demo -d {optimal_addr_with_peer}\n"
+                "\nRun this from the project root in another console:\n\n"
+                f"python -m scripts.dev.echo_protocol_demo -d {optimal_addr_with_peer}\n"
             )
             print("Waiting for incoming connections...")
             await trio.sleep_forever()
@@ -117,12 +121,13 @@ async def run(port: int, destination: str, seed: int | None = None) -> None:
 
 def main() -> None:
     description = """
-    This program demonstrates a simple echo protocol where a peer listens for
-    connections and copies back any input received on a stream.
+    Minimal libp2p echo protocol demo.
 
-    To use it, first run 'python ./echo -p <PORT>', where <PORT> is the port number.
-    Then, run another host with 'python ./chat -p <ANOTHER_PORT> -d <DESTINATION>',
-    where <DESTINATION> is the multiaddress of the previous listener host.
+    First run:
+      python -m scripts.dev.echo_protocol_demo -p <PORT>
+
+    Then run another process with:
+      python -m scripts.dev.echo_protocol_demo -p <ANOTHER_PORT> -d <DESTINATION>
     """
     example_maddr = (
         "/ip4/[HOST_IP]/tcp/8000/p2p/QmQn4SwGkDZKkUEpBRBvTmheQycxAHJUNmVEnjA2v1qe8Q"

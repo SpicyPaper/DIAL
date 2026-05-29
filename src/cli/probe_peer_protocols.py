@@ -1,11 +1,11 @@
 """
-One-shot tester.
+One-shot peer protocol probe.
 
 This script is not a node that stays alive forever.
 It starts a temporary host, connects to an existing node,
 sends one ping or one query, prints the result, then exits.
 
-That is useful for testing a node manually.
+That is useful for manually testing low-level peer protocols.
 """
 
 import argparse
@@ -62,7 +62,7 @@ def main():
         sys.exit(1)
 
     parser = argparse.ArgumentParser(
-        description="Send one ping or one query to a node."
+        description="Probe one node with a low-level ping or query protocol call."
     )
     parser.add_argument("--mode", choices=["ping", "query"], required=True)
     parser.add_argument(

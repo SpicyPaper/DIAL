@@ -32,7 +32,7 @@ pip install uv
 uv sync
 cp .env.example .env
 ./scripts/start_network.sh
-./scripts/query_any.sh 0 "Solve 2x + 4 = 10."
+./scripts/query_node_via_libp2p.sh 0 "Solve 2x + 4 = 10."
 ```
 
 If the model is not already available, `scripts/start_network.sh` asks the
@@ -60,7 +60,7 @@ Stop the network when you are done:
 - LLM-based capability classification at the entry node
 - simulated per-node capability scores for predictable local demos
 - Ollama, AIaaS, local Hugging Face, and dummy backends
-- HTTP APIs, a small web UI, and CLI scripts for local testing
+- FastAPI Node APIs, DIAL Chat, and explicit CLI/debug tools
 
 ## Requirements
 
@@ -170,24 +170,25 @@ Runtime files are written under `.runtime/`, especially:
 .runtime/web/config/bootstrap_nodes.txt
 ```
 
-## Send Queries
+## Send a Terminal Query
 
-Send a query through node 0:
+Send a one-shot terminal query through node 0:
 
 ```bash
-./scripts/query_any.sh 0 "Solve 2x + 4 = 10."
+./scripts/query_node_via_libp2p.sh 0 "Solve 2x + 4 = 10."
 ```
 
 More examples:
 
 ```bash
-./scripts/query_any.sh 0 "Write a Python function that reverses a list."
-./scripts/query_any.sh 0 "Rewrite this sentence to sound professional: send me the file now."
-./scripts/query_any.sh 0 "Make me a 3-step study plan for distributed systems."
+./scripts/query_node_via_libp2p.sh 0 "Write a Python function that reverses a list."
+./scripts/query_node_via_libp2p.sh 0 "Rewrite this sentence to sound professional: send me the file now."
+./scripts/query_node_via_libp2p.sh 0 "Make me a 3-step study plan for distributed systems."
 ```
 
-The entry node classifies the query, scores itself and discovered peers, then
-answers locally or forwards the request.
+This script uses the libp2p query protocol directly. The selected entry node
+classifies the query, scores itself and discovered peers, then answers locally
+or forwards the request.
 
 Successful responses include the generated answer and routing metadata showing
 which node handled the query.
@@ -206,9 +207,33 @@ Then open:
 http://127.0.0.1:8000
 ```
 
-The web UI reads entry-node API URLs from
-`.runtime/web/config/bootstrap_nodes.txt`. The local network script writes the
-first node API there automatically when the file is empty.
+The web UI uses the FastAPI Node API, not the one-shot libp2p query script. It
+reads entry-node API URLs from `.runtime/web/config/bootstrap_nodes.txt`; the
+local network script writes the first node API there automatically when the file
+is empty.
+
+## Command Layout
+
+`scripts/` contains normal local workflow helpers:
+
+```text
+start_network.sh             start a local DIAL network
+stop_network.sh              stop locally running nodes
+start_ollama.sh              start or check the Ollama backend
+query_node_via_libp2p.sh     send one terminal query over libp2p
+preload_local_models.py      cache local Hugging Face models
+```
+
+`src/cli/` contains Python command entry points:
+
+```text
+run_node.py                  start one DIAL node
+query_via_libp2p.py          send one direct libp2p query
+inspect_dht_providers.py     inspect DHT capability providers
+probe_peer_protocols.py      manually test low-level peer protocols
+```
+
+Development-only probes live in `scripts/dev/`.
 
 ## Useful Commands
 
@@ -218,10 +243,10 @@ View started nodes:
 cat .runtime/nodes/state/known_nodes.txt
 ```
 
-Find providers for a capability:
+Inspect DHT providers for a capability:
 
 ```bash
-python -m src.cli.find_nodes \
+python -m src.cli.inspect_dht_providers \
   --bootstrap "$(awk '$1 == 0 {print $5}' .runtime/nodes/state/known_nodes.txt)" \
   --capability math
 ```
@@ -240,21 +265,24 @@ python -m src.cli.run_node \
   --system-prompt "You are a concise mathematics specialist."
 ```
 
-Other CLIs:
+Other CLI entry points:
 
 ```text
-python -m src.cli.client_query  send one query to an entry node
-python -m src.cli.send_message  low-level ping/query test
+python -m src.cli.query_via_libp2p --help
+python -m src.cli.probe_peer_protocols --help
 ```
+
+Development probes are kept in `scripts/dev/`.
 
 ## Project Structure
 
 ```text
-src/          node runtime, services, CLI commands, and web UI
-scripts/      convenience scripts for local runs and queries
-benchmarks/   routing benchmark runner, scenarios, and output files
-report/       LaTeX report source and generated PDF
-.runtime/     generated local runtime state, logs, and web config
+src/           node runtime, services, CLI commands, and web UI
+scripts/       normal local workflow scripts
+scripts/dev/   development-only probes and experiments
+benchmarks/    routing benchmark runner, scenarios, and output files
+report/        LaTeX report source and generated PDF
+.runtime/      generated local runtime state, logs, and web config
 ```
 
 ## Routing Benchmarks

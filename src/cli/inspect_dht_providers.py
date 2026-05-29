@@ -1,5 +1,5 @@
 """
-Inspect DHT capability discovery.
+Inspect DHT capability providers.
 
 This debug CLI:
 - starts a temporary libp2p host
@@ -80,7 +80,7 @@ def main() -> None:
         sys.exit(1)
 
     parser = argparse.ArgumentParser(
-        description="Find nodes advertising a capability through the DHT."
+        description="Inspect nodes advertising a capability through the DHT."
     )
     parser.add_argument(
         "--bootstrap",
