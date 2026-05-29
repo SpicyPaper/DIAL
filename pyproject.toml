@@ -1,7 +1,7 @@
 [project]
-name = "cs498-tsadai"
+name = "dial"
 version = "0.1.0"
-description = ""
+description = "Decentralized Intelligence Access Layer for peer-to-peer discovery and routing of distributed LLM services."
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [

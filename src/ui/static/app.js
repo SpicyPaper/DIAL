@@ -1011,7 +1011,7 @@ function makeTimingSummaryCard(trace) {
   const note = document.createElement("div");
   note.className = "trace-timing-note";
   note.textContent =
-    "Measured inside the network request. Browser-to-gateway time is excluded. " +
+    "Measured inside the network request. Browser-to-DIAL Chat time is excluded. " +
     "Forwarded request round trip includes selected-peer processing and generation.";
   section.appendChild(note);
 
@@ -1363,7 +1363,7 @@ function renderMessages() {
       wrapper.classList.add("pending");
       const pendingText = message.status || "Preparing request...";
       wrapper.innerHTML = `
-        <div class="message-role">TSADAI</div>
+        <div class="message-role">DIAL</div>
         <div class="message-content pending-content" aria-label="Request in progress">
           <span class="pending-text">${escapeHtml(pendingText)}</span>
           <span class="pending-dot"></span><span class="pending-dot"></span><span class="pending-dot"></span>
@@ -1371,7 +1371,7 @@ function renderMessages() {
       `;
     } else {
       wrapper.innerHTML = `
-        <div class="message-role">${role === "user" ? "You" : role === "error" ? "Error" : "TSADAI"}</div>
+        <div class="message-role">${role === "user" ? "You" : role === "error" ? "Error" : "DIAL"}</div>
         <div class="message-content">${markdownToHtml(message.content)}</div>
       `;
       if (role === "assistant" && message.routing_trace) {
@@ -1410,9 +1410,17 @@ function formatContextMeter(info) {
   const used = Math.max(0, Math.min(tokens, maxTokens));
   const includedMessages = Math.max(0, Number(info.included_messages || 0));
   const availableMessages = Math.max(0, Number(info.available_messages || 0));
+  const currentMessage = info.current_message_included ? 1 : 0;
+  const sentMessages = includedMessages + currentMessage;
+  const totalMessages = availableMessages + currentMessage;
+  const messageText =
+    totalMessages > 0
+      ? `${sentMessages.toLocaleString()} / ${totalMessages.toLocaleString()} messages`
+      : "no message yet";
+  const note = info.truncated ? " Older messages stay in chat but are not sent." : "";
   return (
-    `Context: ~${used.toLocaleString()} / ~${maxTokens.toLocaleString()} tokens` +
-    ` - ${includedMessages.toLocaleString()} / ${availableMessages.toLocaleString()} last chat turns`
+    `Sent as context: ${messageText} ` +
+    `(~${used.toLocaleString()} / ${maxTokens.toLocaleString()} tokens).${note}`
   );
 }
 
@@ -1436,12 +1444,6 @@ async function refreshContextPreview() {
       content: message.content,
     }));
   const draft = els.prompt.value.trim();
-  if (draft) {
-    previewMessages.push({
-      role: "User",
-      content: draft,
-    });
-  }
   try {
     const data = await api("/api/context/preview", {
       method: "POST",
@@ -1450,7 +1452,7 @@ async function refreshContextPreview() {
           ? null
           : state.currentConversationId,
         messages: previewMessages,
-        prompt: "",
+        prompt: draft,
       }),
     });
     if (sequence !== state.contextPreviewSeq) {

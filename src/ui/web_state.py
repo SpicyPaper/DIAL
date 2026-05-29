@@ -15,7 +15,6 @@ STATIC_DIR = Path(__file__).resolve().parent / "static"
 WEB_RUNTIME_DIR = ROOT_DIR / ".runtime" / "web"
 BOOTSTRAP_NODES_FILE = WEB_RUNTIME_DIR / "config" / "bootstrap_nodes.txt"
 CONVERSATIONS_FILE = WEB_RUNTIME_DIR / "conversations.json"
-DEFAULT_MAX_CONTEXT_CHARS = 8000
 DEFAULT_CONTEXT_TOKENS = 2000
 DEFAULT_CONTEXT_CHARS_PER_TOKEN = 4
 
@@ -33,33 +32,23 @@ def context_chars_per_token() -> int:
 
 
 def max_context_tokens() -> int:
-    raw = os.environ.get("WEB_CONTEXT_TOKENS")
-    if raw is None:
-        return max(1, (max_context_chars() + context_chars_per_token() - 1) // context_chars_per_token())
+    raw = os.environ.get("WEB_CONTEXT_TOKENS", str(DEFAULT_CONTEXT_TOKENS))
     try:
         value = int(raw)
     except ValueError:
         return DEFAULT_CONTEXT_TOKENS
-    return max(250, value)
+    return max(1, value)
 
 
 def max_context_chars() -> int:
-    token_limit = os.environ.get("WEB_CONTEXT_TOKENS")
-    if token_limit is not None:
-        return max_context_tokens() * context_chars_per_token()
-
-    raw = os.environ.get("WEB_MAX_CONTEXT_CHARS", str(DEFAULT_MAX_CONTEXT_CHARS))
-    try:
-        value = int(raw)
-    except ValueError:
-        return DEFAULT_MAX_CONTEXT_CHARS
-    return max(1000, value)
+    return max_context_tokens() * context_chars_per_token()
 
 
 def make_context_info(
     *,
     included_messages: int,
     available_messages: int,
+    current_message_included: bool,
     history_chars: int,
     total_chars: int,
     chat_chars: int,
@@ -73,10 +62,12 @@ def make_context_info(
     chat_approx_tokens = 0
     if chat_chars > 0:
         chat_approx_tokens = max(1, (chat_chars + chars_per_token - 1) // chars_per_token)
-    max_tokens = max(1, (max_chars + chars_per_token - 1) // chars_per_token)
+    max_tokens = max_context_tokens()
+    remaining_tokens = max(0, max_tokens - chat_approx_tokens)
     return {
         "included_messages": included_messages,
         "available_messages": available_messages,
+        "current_message_included": current_message_included,
         "history_chars": history_chars,
         "total_chars": total_chars,
         "chat_chars": chat_chars,
@@ -84,6 +75,7 @@ def make_context_info(
         "chat_approx_tokens": chat_approx_tokens,
         "max_context_chars": max_chars,
         "max_context_tokens": max_tokens,
+        "remaining_context_tokens": remaining_tokens,
         "chars_per_token": chars_per_token,
         "truncated": truncated,
     }
@@ -185,6 +177,7 @@ def build_network_context(messages: list[dict], prompt: str) -> tuple[str, dict]
         return prompt, make_context_info(
             included_messages=0,
             available_messages=0,
+            current_message_included=bool(prompt.strip()),
             history_chars=0,
             total_chars=prompt_chars,
             chat_chars=prompt_chars,
@@ -227,6 +220,7 @@ def build_network_context(messages: list[dict], prompt: str) -> tuple[str, dict]
         return prompt, make_context_info(
             included_messages=0,
             available_messages=len(messages),
+            current_message_included=bool(prompt.strip()),
             history_chars=0,
             total_chars=prompt_chars,
             chat_chars=prompt_chars,
@@ -238,6 +232,7 @@ def build_network_context(messages: list[dict], prompt: str) -> tuple[str, dict]
     return network_prompt, make_context_info(
         included_messages=len(selected),
         available_messages=len(messages),
+        current_message_included=bool(prompt.strip()),
         history_chars=used,
         total_chars=len(network_prompt),
         chat_chars=chat_used + prompt_chars,

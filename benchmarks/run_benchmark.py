@@ -59,7 +59,7 @@ class NodeProcess:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Run TSADAI routing benchmarks.")
+    parser = argparse.ArgumentParser(description="Run DIAL routing benchmarks.")
     parser.add_argument(
         "--scenario",
         required=True,

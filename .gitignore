@@ -226,3 +226,5 @@ report/*.out
 report/*.run.xml
 report/*.toc
 report/*.xdv
+
+report/

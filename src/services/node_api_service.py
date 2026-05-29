@@ -30,7 +30,7 @@ class NodeAPIService:
         self.port = port
         self._progress_lock = Lock()
         self._progress_by_query_id: dict[str, list[dict]] = {}
-        self.app = FastAPI(title="TSADAI Node API")
+        self.app = FastAPI(title="DIAL Node API")
         self.app.add_api_route(
             "/api/query",
             self.query,

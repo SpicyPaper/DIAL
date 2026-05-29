@@ -486,7 +486,7 @@ wheels = [
 ]
 
 [[package]]
-name = "cs498-tsadai"
+name = "dial"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [

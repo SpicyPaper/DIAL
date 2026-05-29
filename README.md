@@ -1,11 +1,14 @@
-# CS498 TSADAI
+# DIAL
 
-Trustworthy and Scalable Architectures for Decentralized AI Systems.
+Decentralized Intelligence Access Layer.
+
+Beyond Centralized AI: Peer-to-Peer Discovery and Routing for Distributed LLM
+Services.
 
 This project runs a local network of libp2p nodes. Each node advertises its
 capabilities through a Kademlia DHT; an entry node classifies a query, discovers
-suitable peers, and either answers locally or forwards the query to a better
-matching node.
+suitable peers, and either answers locally or forwards the query to a peer with
+a suitable routing score.
 
 The recommended backend is Ollama with Qwen3 1.7B. The project can also use the
 EPFL AIaaS API, local Hugging Face Transformers models, or a dummy backend for
@@ -28,7 +31,7 @@ In another terminal, set up the project and run a query:
 pip install uv
 uv sync
 cp .env.example .env
-./scripts/start_network.sh 4
+./scripts/start_network.sh
 ./scripts/query_any.sh 0 "Solve 2x + 4 = 10."
 ```
 
@@ -191,7 +194,7 @@ which node handled the query.
 
 ## Web UI
 
-Start the FastAPI web gateway:
+Start DIAL Chat:
 
 ```bash
 python -m src.ui.web_app
@@ -293,10 +296,10 @@ in `benchmarks/scenarios/README.md`.
 The LaTeX report can be built with the uv-installed Tectonic compiler:
 
 ```powershell
-uv run tecto -X compile report\Simple_report.tex
+uv run tecto -X compile report\report.tex
 ```
 
-The generated PDF is written to `report/Simple_report.pdf`. Add
+The generated PDF is written to `report/report.pdf`. Add
 `--print --keep-logs` to the command if you need detailed TeX output
 while debugging.
 

@@ -14,7 +14,7 @@ DEFAULT_OUTPUT_DIR = PROJECT_ROOT / "benchmarks" / "output"
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Run TSADAI benchmark campaigns one after the other."
+        description="Run DIAL benchmark campaigns one after the other."
     )
     parser.add_argument(
         "--scenarios-root",

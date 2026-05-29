@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>TSADAI Chat</title>
+    <title>DIAL Chat</title>
     <link rel="icon" type="image/svg+xml" href="/static/favicon.svg" />
     <link rel="stylesheet" href="/static/style.css" />
   </head>
@@ -11,7 +11,7 @@
     <main class="app-shell">
       <aside class="sidebar">
         <div class="sidebar-header">
-          <h1>TSADAI</h1>
+          <h1>DIAL</h1>
           <button id="new-chat" type="button">New chat</button>
         </div>
         <button id="delete-chat" class="secondary" type="button">Delete chat</button>
@@ -35,7 +35,9 @@
           hidden
         ></section>
 
-        <section id="messages" class="messages"></section>
+        <div class="messages-frame">
+          <section id="messages" class="messages"></section>
+        </div>
 
         <div class="composer-shell">
           <div

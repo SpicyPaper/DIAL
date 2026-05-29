@@ -28,7 +28,7 @@ from src.ui.web_state import (
 )
 
 
-app = FastAPI(title="TSADAI Gateway")
+app = FastAPI(title="DIAL Chat")
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 lock = Lock()
