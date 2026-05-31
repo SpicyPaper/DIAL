@@ -191,7 +191,7 @@ if [ "$REQUEST_BACKEND" = "local" ] || [ "$CLASSIFIER_BACKEND" = "local" ]; then
 
   echo "Local Transformers configured: request_model=${LOCAL_MODEL_ID} classifier_model=${LOCAL_CLASSIFIER_MODEL_ID}"
   echo "Preloading local Hugging Face model files before starting nodes..."
-  python -m scripts.preload_local_models
+  python -m src.cli.preload_local_models
 fi
 
 if [ "$REQUEST_BACKEND" = "local" ] || [ "$CLASSIFIER_BACKEND" = "local" ]; then

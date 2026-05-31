@@ -221,7 +221,6 @@ start_network.sh             start a local DIAL network
 stop_network.sh              stop locally running nodes
 start_ollama.sh              start or check the Ollama backend
 query_node_via_libp2p.sh     send one terminal query over libp2p
-preload_local_models.py      cache local Hugging Face models
 ```
 
 `src/cli/` contains Python command entry points:
@@ -231,9 +230,11 @@ run_node.py                  start one DIAL node
 query_via_libp2p.py          send one direct libp2p query
 inspect_dht_providers.py     inspect DHT capability providers
 probe_peer_protocols.py      manually test low-level peer protocols
+preload_local_models.py      cache local Hugging Face models
+check_local_model_loading.py check local Transformers generation
 ```
 
-Development-only probes live in `scripts/dev/`.
+Development-only experiments live in `scripts/dev/`.
 
 ## Useful Commands
 
@@ -272,7 +273,7 @@ python -m src.cli.query_via_libp2p --help
 python -m src.cli.probe_peer_protocols --help
 ```
 
-Development probes are kept in `scripts/dev/`.
+Development-only experiments are kept in `scripts/dev/`.
 
 ## Project Structure
 
