@@ -39,7 +39,8 @@
   "top_k": 3,
   "capability_advertise_interval_s": 5,
   "shuffle_queries": true,
-  "warmup_s": 12,
+  "warmup_s": 15,
+  "post_dropout_warmup_s": 0,
   "startup_timeout_s": 90,
   "query_timeout_s": 150
 }

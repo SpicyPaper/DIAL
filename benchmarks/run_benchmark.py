@@ -44,6 +44,8 @@ DEFAULT_PROMPTS = {
 }
 DEFAULT_MIXED_PROMPT = "Answer a query that requires several capabilities."
 DEFAULT_BENCHMARK_ADVERTISE_INTERVAL_S = 5.0
+DEFAULT_DROPOUT_SETTLE_S = 2.0
+DEFAULT_POST_DROPOUT_WARMUP_S = 10.0
 
 
 @dataclass
@@ -168,6 +170,14 @@ def validate_scenario(scenario: dict[str, Any]) -> None:
 
     for config in runs:
         parse_latency(config.get("network_latency_ms", [0, 0]))
+        for key in (
+            "warmup_s",
+            "dropout_settle_s",
+            "post_dropout_warmup_s",
+            "capability_advertise_interval_s",
+        ):
+            if key in config and float(config[key]) < 0.0:
+                raise ValueError(f"{key} must be non-negative")
         select_entry_node(
             entry_nodes=[NodeProcess(0, 0, 0, ENTRY_CAPABILITY, "validation", Path("."), process=None)],  # type: ignore[arg-type]
             strategy=str(config.get("entry_node_strategy", "round_robin")),
@@ -209,6 +219,15 @@ def run_one_network(
         time.sleep(warmup_s)
 
         dropped = apply_dropout(nodes, config)
+        post_dropout_warmup_s = configured_post_dropout_warmup_s(config)
+        if dropped and post_dropout_warmup_s > 0.0:
+            print(
+                f"[{run_name}] post-dropout warmup "
+                f"{post_dropout_warmup_s:.1f}s",
+                flush=True,
+            )
+            time.sleep(post_dropout_warmup_s)
+
         profiles = fetch_all_profiles(nodes)
         active_profiles = {
             profile["peer_id"]: profile
@@ -225,6 +244,20 @@ def run_one_network(
         return rows
     finally:
         stop_nodes(nodes)
+
+
+def configured_post_dropout_warmup_s(config: dict[str, Any]) -> float:
+    if "post_dropout_warmup_s" in config:
+        return float(config["post_dropout_warmup_s"])
+    if float(config.get("dropout_rate", 0.0)) > 0.0:
+        return DEFAULT_POST_DROPOUT_WARMUP_S
+    return 0.0
+
+
+def configured_dropout_settle_s(config: dict[str, Any]) -> float:
+    if float(config.get("dropout_rate", 0.0)) <= 0.0:
+        return 0.0
+    return float(config.get("dropout_settle_s", DEFAULT_DROPOUT_SETTLE_S))
 
 
 def start_network(
@@ -664,7 +697,7 @@ def apply_dropout(nodes: list[NodeProcess], config: dict[str, Any]) -> list[Node
     for node in dropped:
         terminate_process(node.process)
         print(f"dropped node {node.index}: {node.peer_id}", flush=True)
-    settle_s = float(config.get("dropout_settle_s", 2.0))
+    settle_s = configured_dropout_settle_s(config)
     if dropped and settle_s > 0.0:
         time.sleep(settle_s)
     return dropped
@@ -759,8 +792,11 @@ def write_summary(
             str(config.get("num_nodes")),
             str(config.get("network_latency_ms")),
             str(config.get("dropout_rate")),
+            str(configured_dropout_settle_s(config)),
             str(config.get("routing_policy")),
             str(config.get("entry_node_strategy", "round_robin")),
+            str(config.get("warmup_s")),
+            str(configured_post_dropout_warmup_s(config)),
             str(
                 config.get(
                     "capability_advertise_interval_s",
@@ -780,8 +816,11 @@ def write_summary(
         "num_nodes",
         "network_latency_ms",
         "dropout_rate",
+        "dropout_settle_s",
         "routing_policy",
         "entry_node_strategy",
+        "warmup_s",
+        "post_dropout_warmup_s",
         "capability_advertise_interval_s",
         "shuffle_queries",
         "slow_node_fraction",
@@ -805,8 +844,11 @@ def write_summary(
                 num_nodes,
                 network_latency_ms,
                 dropout_rate,
+                dropout_settle_s,
                 routing_policy,
                 entry_node_strategy,
+                warmup_s,
+                post_dropout_warmup_s,
                 capability_advertise_interval_s,
                 shuffle_queries,
                 slow_node_fraction,
@@ -818,8 +860,11 @@ def write_summary(
                     "num_nodes": num_nodes,
                     "network_latency_ms": network_latency_ms,
                     "dropout_rate": dropout_rate,
+                    "dropout_settle_s": dropout_settle_s,
                     "routing_policy": routing_policy,
                     "entry_node_strategy": entry_node_strategy,
+                    "warmup_s": warmup_s,
+                    "post_dropout_warmup_s": post_dropout_warmup_s,
                     "capability_advertise_interval_s": capability_advertise_interval_s,
                     "shuffle_queries": shuffle_queries,
                     "slow_node_fraction": slow_node_fraction,
@@ -855,8 +900,11 @@ def write_per_query_metrics(path: Path, rows: list[dict[str, Any]]) -> None:
         "num_nodes",
         "network_latency_ms",
         "dropout_rate",
+        "dropout_settle_s",
         "routing_policy",
         "entry_node_strategy",
+        "warmup_s",
+        "post_dropout_warmup_s",
         "capability_advertise_interval_s",
         "shuffle_queries",
         "slow_node_fraction",
@@ -902,8 +950,11 @@ def write_per_query_metrics(path: Path, rows: list[dict[str, Any]]) -> None:
                 "num_nodes": config.get("num_nodes"),
                 "network_latency_ms": config.get("network_latency_ms"),
                 "dropout_rate": config.get("dropout_rate"),
+                "dropout_settle_s": configured_dropout_settle_s(config),
                 "routing_policy": config.get("routing_policy"),
                 "entry_node_strategy": config.get("entry_node_strategy", "round_robin"),
+                "warmup_s": config.get("warmup_s"),
+                "post_dropout_warmup_s": configured_post_dropout_warmup_s(config),
                 "capability_advertise_interval_s": config.get(
                     "capability_advertise_interval_s",
                     DEFAULT_BENCHMARK_ADVERTISE_INTERVAL_S,
@@ -968,8 +1019,11 @@ def compact_run_config(config: dict[str, Any]) -> dict[str, Any]:
         "num_nodes",
         "network_latency_ms",
         "dropout_rate",
+        "dropout_settle_s",
         "routing_policy",
         "entry_node_strategy",
+        "warmup_s",
+        "post_dropout_warmup_s",
         "capability_advertise_interval_s",
         "shuffle_queries",
         "slow_node_fraction",
@@ -983,6 +1037,11 @@ def compact_run_config(config: dict[str, Any]) -> dict[str, Any]:
         "capability_advertise_interval_s",
         DEFAULT_BENCHMARK_ADVERTISE_INTERVAL_S,
     )
+    compact.setdefault(
+        "post_dropout_warmup_s",
+        configured_post_dropout_warmup_s(config),
+    )
+    compact["dropout_settle_s"] = configured_dropout_settle_s(config)
     compact.setdefault("shuffle_queries", True)
     return compact
 
