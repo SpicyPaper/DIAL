@@ -19,11 +19,9 @@
   ],
   "queries_per_capability": 5,
   "top_k": 3,
+  "capability_advertise_interval_s": 5,
+  "shuffle_queries": true,
   "warmup_s": 30,
   "startup_timeout_s": 120,
   "query_timeout_s": 240
 }
-
-
-
-
