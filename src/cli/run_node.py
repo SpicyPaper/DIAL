@@ -15,7 +15,6 @@ from src.env_config import (
     env_float,
     env_int,
     load_project_env,
-    optional_env,
     require_env,
 )
 from src.ollama_utils import OllamaError, check_ollama_ready
@@ -42,92 +41,43 @@ def configure_from_env(args) -> None:
     args.query_connect_timeout = env_float("QUERY_CONNECT_TIMEOUT")
     args.classifier_timeout = env_float("CLASSIFIER_TIMEOUT")
     args.api_host = require_env("API_HOST")
-    args.routing_policy = optional_env("ROUTING_POLICY", "current")
-    args.benchmark_mode = optional_env("BENCHMARK_MODE", "false").lower() in {
-        "1",
-        "true",
-        "yes",
-        "on",
-    }
-    args.benchmark_network_latency_min_ms = float(
-        optional_env("BENCHMARK_NETWORK_LATENCY_MIN_MS", "0")
+    args.routing_policy = require_env("ROUTING_POLICY")
+    args.capability_advertise_interval_s = env_float(
+        "CAPABILITY_ADVERTISE_INTERVAL_S"
     )
-    args.benchmark_network_latency_max_ms = float(
-        optional_env("BENCHMARK_NETWORK_LATENCY_MAX_MS", "0")
+    args.benchmark_mode = env_bool("BENCHMARK_MODE")
+    args.benchmark_network_latency_min_ms = env_float(
+        "BENCHMARK_NETWORK_LATENCY_MIN_MS"
     )
-    args.benchmark_node_network_extra_latency_ms = float(
-        optional_env("BENCHMARK_NODE_NETWORK_EXTRA_LATENCY_MS", "0")
+    args.benchmark_network_latency_max_ms = env_float(
+        "BENCHMARK_NETWORK_LATENCY_MAX_MS"
     )
-    args.benchmark_seed = int(optional_env("BENCHMARK_SEED", "42"))
+    args.benchmark_node_network_extra_latency_ms = env_float(
+        "BENCHMARK_NODE_NETWORK_EXTRA_LATENCY_MS"
+    )
+    args.benchmark_seed = env_int("BENCHMARK_SEED")
 
-    if (
-        args.agent_backend == "local"
-        or args.classifier_backend == "local"
-    ):
-        args.local_model_id = require_env("LOCAL_MODEL_ID")
-        args.local_classifier_model_id = require_env("LOCAL_CLASSIFIER_MODEL_ID")
-        args.local_max_new_tokens = env_int("LOCAL_MAX_NEW_TOKENS")
-        args.local_enable_thinking = env_bool("LOCAL_ENABLE_THINKING")
-        args.local_timeout = env_float("LOCAL_TIMEOUT")
-    else:
-        args.local_model_id = optional_env("LOCAL_MODEL_ID", "Qwen/Qwen3-1.7B")
-        args.local_classifier_model_id = optional_env(
-            "LOCAL_CLASSIFIER_MODEL_ID",
-            args.local_model_id,
-        )
-        args.local_max_new_tokens = int(optional_env("LOCAL_MAX_NEW_TOKENS", "512"))
-        args.local_enable_thinking = optional_env(
-            "LOCAL_ENABLE_THINKING",
-            "false",
-        ).lower() in {"1", "true", "yes", "on"}
-        args.local_timeout = float(optional_env("LOCAL_TIMEOUT", "40"))
+    args.local_model_id = require_env("LOCAL_MODEL_ID")
+    args.local_classifier_model_id = require_env("LOCAL_CLASSIFIER_MODEL_ID")
+    args.local_max_new_tokens = env_int("LOCAL_MAX_NEW_TOKENS")
+    args.local_enable_thinking = env_bool("LOCAL_ENABLE_THINKING")
+    args.local_timeout = env_float("LOCAL_TIMEOUT")
     args.local_system_prompt = args.system_prompt
 
-    if (
-        args.agent_backend == "ollama"
-        or args.classifier_backend == "ollama"
-    ):
-        args.ollama_model = require_env("OLLAMA_MODEL")
-        args.ollama_classifier_model = require_env("OLLAMA_CLASSIFIER_MODEL")
-        args.ollama_host = require_env("OLLAMA_HOST")
-        args.ollama_timeout = env_float("OLLAMA_TIMEOUT")
-        args.ollama_num_predict = env_int("OLLAMA_NUM_PREDICT")
-        args.ollama_check_timeout = env_float("OLLAMA_CHECK_TIMEOUT")
-    else:
-        args.ollama_model = optional_env("OLLAMA_MODEL", "qwen3:1.7b")
-        args.ollama_classifier_model = optional_env(
-            "OLLAMA_CLASSIFIER_MODEL",
-            args.ollama_model,
-        )
-        args.ollama_host = optional_env("OLLAMA_HOST", "http://localhost:11434")
-        args.ollama_timeout = float(optional_env("OLLAMA_TIMEOUT", "40"))
-        args.ollama_num_predict = int(optional_env("OLLAMA_NUM_PREDICT", "512"))
-        args.ollama_check_timeout = float(optional_env("OLLAMA_CHECK_TIMEOUT", "5"))
+    args.ollama_model = require_env("OLLAMA_MODEL")
+    args.ollama_classifier_model = require_env("OLLAMA_CLASSIFIER_MODEL")
+    args.ollama_host = require_env("OLLAMA_HOST")
+    args.ollama_timeout = env_float("OLLAMA_TIMEOUT")
+    args.ollama_num_predict = env_int("OLLAMA_NUM_PREDICT")
+    args.ollama_check_timeout = env_float("OLLAMA_CHECK_TIMEOUT")
     args.ollama_system_prompt = args.system_prompt
 
-    if (
-        args.agent_backend == "aiass"
-        or args.classifier_backend == "aiass"
-    ):
-        args.aiass_model = require_env("AIASS_MODEL")
-        args.aiass_classifier_model = require_env("AIASS_CLASSIFIER_MODEL")
-        args.aiass_base_url = require_env("AIASS_BASE_URL")
-        args.aiass_api_key = require_env("AIASS_API_KEY")
-        args.aiass_timeout = env_float("AIASS_TIMEOUT")
-        args.aiass_max_tokens = env_int("AIASS_MAX_TOKENS")
-    else:
-        args.aiass_model = optional_env("AIASS_MODEL", "Qwen/Qwen3-1.7B")
-        args.aiass_classifier_model = optional_env(
-            "AIASS_CLASSIFIER_MODEL",
-            args.aiass_model,
-        )
-        args.aiass_base_url = optional_env(
-            "AIASS_BASE_URL",
-            "https://inference-rcp.epfl.ch/v1",
-        )
-        args.aiass_api_key = optional_env("AIASS_API_KEY")
-        args.aiass_timeout = float(optional_env("AIASS_TIMEOUT", "40"))
-        args.aiass_max_tokens = int(optional_env("AIASS_MAX_TOKENS", "512"))
+    args.aiass_model = require_env("AIASS_MODEL")
+    args.aiass_classifier_model = require_env("AIASS_CLASSIFIER_MODEL")
+    args.aiass_base_url = require_env("AIASS_BASE_URL")
+    args.aiass_api_key = require_env("AIASS_API_KEY")
+    args.aiass_timeout = env_float("AIASS_TIMEOUT")
+    args.aiass_max_tokens = env_int("AIASS_MAX_TOKENS")
     args.aiass_system_prompt = args.system_prompt
 
 
@@ -206,6 +156,7 @@ async def async_main(args):
         query_timeout=args.query_timeout,
         query_connect_timeout=args.query_connect_timeout,
         routing_policy=args.routing_policy,
+        capability_advertise_interval_s=args.capability_advertise_interval_s,
         benchmark_mode=args.benchmark_mode,
         benchmark_network_latency_min_ms=args.benchmark_network_latency_min_ms,
         benchmark_network_latency_max_ms=args.benchmark_network_latency_max_ms,

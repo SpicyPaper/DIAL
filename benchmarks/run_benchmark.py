@@ -16,7 +16,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from src.env_config import load_project_env, optional_env
+from src.env_config import load_project_env, require_env
 from src.services.routing_policy import get_routing_policy
 
 
@@ -43,6 +43,7 @@ DEFAULT_PROMPTS = {
     "creative": "Generate a constrained creative idea.",
 }
 DEFAULT_MIXED_PROMPT = "Answer a query that requires several capabilities."
+DEFAULT_BENCHMARK_ADVERTISE_INTERVAL_S = 5.0
 
 
 @dataclass
@@ -181,6 +182,15 @@ def as_list(value: Any) -> list[Any]:
     return value if isinstance(value, list) else [value]
 
 
+def config_bool(config: dict[str, Any], key: str, default: bool) -> bool:
+    value = config.get(key, default)
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        return value.strip().lower() in {"1", "true", "yes", "on"}
+    return bool(value)
+
+
 def run_one_network(
     config: dict[str, Any],
     campaign_dir: Path,
@@ -223,14 +233,28 @@ def start_network(
     run_index: int,
 ) -> list[NodeProcess]:
     num_nodes = int(config["num_nodes"])
-    api_host = str(config.get("api_host", optional_env("API_HOST", "127.0.0.1")))
-    base_port = int(config.get("base_port", optional_env("BASE_PORT", "8002")))
-    api_base_port = int(config.get("api_base_port", optional_env("API_BASE_PORT", "9002")))
+    api_host = str(
+        config["api_host"] if "api_host" in config else require_env("API_HOST")
+    )
+    base_port = int(
+        config["base_port"] if "base_port" in config else require_env("BASE_PORT")
+    )
+    api_base_port = int(
+        config["api_base_port"]
+        if "api_base_port" in config
+        else require_env("API_BASE_PORT")
+    )
     port_offset = int(config.get("port_offset", 100 * run_index))
     seed_base = round_seed(config)
     latency = config.get("network_latency_ms", [0, 0])
     latency_min_ms, latency_max_ms = parse_latency(latency)
     slow_nodes = select_slow_nodes(num_nodes, config, seed_base)
+    advertise_interval_s = float(
+        config.get(
+            "capability_advertise_interval_s",
+            DEFAULT_BENCHMARK_ADVERTISE_INTERVAL_S,
+        )
+    )
 
     nodes: list[NodeProcess] = []
     bootstrap_addr = None
@@ -279,6 +303,7 @@ def start_network(
                 "BENCHMARK_NETWORK_LATENCY_MAX_MS": str(latency_max_ms),
                 "BENCHMARK_NODE_NETWORK_EXTRA_LATENCY_MS": str(extra_latency),
                 "BENCHMARK_SEED": str(seed_base),
+                "CAPABILITY_ADVERTISE_INTERVAL_S": str(advertise_interval_s),
                 "API_HOST": api_host,
             }
         )
@@ -321,53 +346,70 @@ def execute_queries(
     dropped: list[NodeProcess],
     run_name: str,
 ) -> list[dict[str, Any]]:
-    query_capabilities = as_list(config.get("query_capability", CAPS_POOL))
-    queries_per_capability = int(config.get("queries_per_capability", 3))
+    query_schedule = build_query_schedule(config)
     top_k = int(config.get("top_k", 3))
     entry_node_strategy = str(config.get("entry_node_strategy", "round_robin"))
     entry_nodes = available_entry_nodes(nodes, dropped)
     entry_rng = random.Random(round_seed(config) + 2029)
     rows: list[dict[str, Any]] = []
-    query_index = 0
+
+    for query_index, query_case in enumerate(query_schedule):
+        query_label, required_capabilities, prompt, repeat = query_case
+        entry_node = select_entry_node(
+            entry_nodes,
+            entry_node_strategy,
+            query_index,
+            entry_rng,
+        )
+        query_id = f"{run_name}-q{query_index:03d}-{query_label}-{repeat}"
+        started_at = time.perf_counter()
+        reply, error = post_json(
+            f"{entry_node.api_url}/api/query",
+            {
+                "prompt": prompt,
+                "query_id": query_id,
+                "required_capabilities": required_capabilities,
+            },
+            timeout_s=float(config.get("query_timeout_s", 90.0)),
+        )
+        end_to_end_ms = (time.perf_counter() - started_at) * 1000.0
+        row = build_result_row(
+            query_id=query_id,
+            capability=query_label,
+            required_capabilities=required_capabilities,
+            reply=reply,
+            error=error,
+            end_to_end_ms=end_to_end_ms,
+            profiles=active_profiles,
+            dropped=dropped,
+            top_k=top_k,
+            entry_node=entry_node,
+            entry_node_strategy=entry_node_strategy,
+        )
+        row["query_order_index"] = query_index
+        row["query_repeat"] = repeat
+        rows.append(row)
+
+    return rows
+
+
+def build_query_schedule(
+    config: dict[str, Any],
+) -> list[tuple[str, dict[str, float], str, int]]:
+    query_capabilities = as_list(config.get("query_capability", CAPS_POOL))
+    queries_per_capability = int(config.get("queries_per_capability", 3))
+    schedule: list[tuple[str, dict[str, float], str, int]] = []
 
     for query_spec in query_capabilities:
         query_label, required_capabilities, prompt = normalize_query_spec(query_spec)
         for repeat in range(queries_per_capability):
-            entry_node = select_entry_node(
-                entry_nodes,
-                entry_node_strategy,
-                query_index,
-                entry_rng,
-            )
-            query_id = f"{run_name}-{query_label}-{repeat}"
-            started_at = time.perf_counter()
-            reply, error = post_json(
-                f"{entry_node.api_url}/api/query",
-                {
-                    "prompt": prompt,
-                    "query_id": query_id,
-                    "required_capabilities": required_capabilities,
-                },
-                timeout_s=float(config.get("query_timeout_s", 90.0)),
-            )
-            end_to_end_ms = (time.perf_counter() - started_at) * 1000.0
-            row = build_result_row(
-                query_id=query_id,
-                capability=query_label,
-                required_capabilities=required_capabilities,
-                reply=reply,
-                error=error,
-                end_to_end_ms=end_to_end_ms,
-                profiles=active_profiles,
-                dropped=dropped,
-                top_k=top_k,
-                entry_node=entry_node,
-                entry_node_strategy=entry_node_strategy,
-            )
-            rows.append(row)
-            query_index += 1
+            schedule.append((query_label, required_capabilities, prompt, repeat))
 
-    return rows
+    if config_bool(config, "shuffle_queries", True):
+        schedule_rng = random.Random(round_seed(config) + 3037)
+        schedule_rng.shuffle(schedule)
+
+    return schedule
 
 
 def available_entry_nodes(
@@ -719,6 +761,13 @@ def write_summary(
             str(config.get("dropout_rate")),
             str(config.get("routing_policy")),
             str(config.get("entry_node_strategy", "round_robin")),
+            str(
+                config.get(
+                    "capability_advertise_interval_s",
+                    DEFAULT_BENCHMARK_ADVERTISE_INTERVAL_S,
+                )
+            ),
+            str(config_bool(config, "shuffle_queries", True)),
             str(config.get("slow_node_fraction")),
             str(config.get("slow_node_extra_latency_ms")),
         ]
@@ -733,6 +782,8 @@ def write_summary(
         "dropout_rate",
         "routing_policy",
         "entry_node_strategy",
+        "capability_advertise_interval_s",
+        "shuffle_queries",
         "slow_node_fraction",
         "slow_node_extra_latency_ms",
         "round",
@@ -756,6 +807,8 @@ def write_summary(
                 dropout_rate,
                 routing_policy,
                 entry_node_strategy,
+                capability_advertise_interval_s,
+                shuffle_queries,
                 slow_node_fraction,
                 slow_node_extra_latency_ms,
                 *round_part,
@@ -767,6 +820,8 @@ def write_summary(
                     "dropout_rate": dropout_rate,
                     "routing_policy": routing_policy,
                     "entry_node_strategy": entry_node_strategy,
+                    "capability_advertise_interval_s": capability_advertise_interval_s,
+                    "shuffle_queries": shuffle_queries,
                     "slow_node_fraction": slow_node_fraction,
                     "slow_node_extra_latency_ms": slow_node_extra_latency_ms,
                     "round": round_part[0] if include_round and round_part else "all",
@@ -802,9 +857,13 @@ def write_per_query_metrics(path: Path, rows: list[dict[str, Any]]) -> None:
         "dropout_rate",
         "routing_policy",
         "entry_node_strategy",
+        "capability_advertise_interval_s",
+        "shuffle_queries",
         "slow_node_fraction",
         "slow_node_extra_latency_ms",
         "query_id",
+        "query_order_index",
+        "query_repeat",
         "query_capability",
         "entry_node_index",
         "entry_peer_id",
@@ -845,6 +904,11 @@ def write_per_query_metrics(path: Path, rows: list[dict[str, Any]]) -> None:
                 "dropout_rate": config.get("dropout_rate"),
                 "routing_policy": config.get("routing_policy"),
                 "entry_node_strategy": config.get("entry_node_strategy", "round_robin"),
+                "capability_advertise_interval_s": config.get(
+                    "capability_advertise_interval_s",
+                    DEFAULT_BENCHMARK_ADVERTISE_INTERVAL_S,
+                ),
+                "shuffle_queries": config_bool(config, "shuffle_queries", True),
                 "slow_node_fraction": config.get("slow_node_fraction"),
                 "slow_node_extra_latency_ms": config.get(
                     "slow_node_extra_latency_ms"
@@ -906,13 +970,21 @@ def compact_run_config(config: dict[str, Any]) -> dict[str, Any]:
         "dropout_rate",
         "routing_policy",
         "entry_node_strategy",
+        "capability_advertise_interval_s",
+        "shuffle_queries",
         "slow_node_fraction",
         "slow_node_extra_latency_ms",
         "query_capability",
         "round",
         "rounds",
     ]
-    return {key: config.get(key) for key in keys if key in config}
+    compact = {key: config.get(key) for key in keys if key in config}
+    compact.setdefault(
+        "capability_advertise_interval_s",
+        DEFAULT_BENCHMARK_ADVERTISE_INTERVAL_S,
+    )
+    compact.setdefault("shuffle_queries", True)
+    return compact
 
 
 def run_label(config: dict[str, Any], run_index: int) -> str:

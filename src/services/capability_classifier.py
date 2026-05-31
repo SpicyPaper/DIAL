@@ -3,6 +3,7 @@ import re
 from typing import TYPE_CHECKING
 
 from src.logging_utils import log
+from src.model_defaults import DEFAULT_OLLAMA_MODEL
 
 if TYPE_CHECKING:
     from src.local_agent import LocalAgent
@@ -62,7 +63,7 @@ CLASSIFIER_JSON_SCHEMA = {
 class CapabilityClassifier:
     def __init__(
         self,
-        model: str = "qwen3:1.7b",
+        model: str = DEFAULT_OLLAMA_MODEL,
         host: str = "http://localhost:11434",
         timeout_s: float = 60.0,
         agent: "LocalAgent | None" = None,

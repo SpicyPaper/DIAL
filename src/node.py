@@ -14,6 +14,12 @@ from libp2p.utils.address_validation import (
 from src.local_agent import AIAssAgent, DummyAgent, LocalTransformersAgent, OllamaAgent
 from src.network_utils import connect_to_bootstrap_peers
 from src.logging_utils import log
+from src.model_defaults import (
+    DEFAULT_AIASS_BASE_URL,
+    DEFAULT_AIASS_MODEL,
+    DEFAULT_LOCAL_MODEL_ID,
+    DEFAULT_OLLAMA_MODEL,
+)
 from src.models import NodeProfile, QueryContext
 from src.peer_registry import PeerRegistry
 from src.protocols import (
@@ -43,7 +49,7 @@ from src.benchmark_simulator import (
 )
 
 
-CAPABILITY_ADVERTISE_INTERVAL_S = 30 * 60.0
+CAPABILITY_ADVERTISE_INTERVAL_S = 20.0
 MAX_ADVERTISED_CAPABILITIES = 3
 class Node:
     """
@@ -105,21 +111,21 @@ class Node:
         enable_gossip: bool = False,
         agent_backend: str = "dummy",
         classifier_backend: str = "dummy",
-        local_model_id: str = "Qwen/Qwen3-1.7B",
+        local_model_id: str = DEFAULT_LOCAL_MODEL_ID,
         local_classifier_model_id: str | None = None,
         local_max_new_tokens: int = 512,
         local_enable_thinking: bool = False,
         local_timeout: float = 40.0,
         local_system_prompt: str | None = None,
-        ollama_model: str = "qwen3:1.7b",
+        ollama_model: str = DEFAULT_OLLAMA_MODEL,
         ollama_classifier_model: str | None = None,
         ollama_host: str = "http://localhost:11434",
         ollama_timeout: float = 300.0,
         ollama_num_predict: int = 512,
         ollama_system_prompt: str | None = None,
-        aiass_model: str = "Qwen/Qwen3-1.7B",
+        aiass_model: str = DEFAULT_AIASS_MODEL,
         aiass_classifier_model: str | None = None,
-        aiass_base_url: str = "https://inference-rcp.epfl.ch/v1",
+        aiass_base_url: str = DEFAULT_AIASS_BASE_URL,
         aiass_api_key: str = "",
         aiass_timeout: float = 300.0,
         aiass_max_tokens: int = 512,
@@ -128,6 +134,7 @@ class Node:
         query_timeout: float = 60.0,
         query_connect_timeout: float = 3.0,
         routing_policy: str = "current",
+        capability_advertise_interval_s: float = CAPABILITY_ADVERTISE_INTERVAL_S,
         benchmark_mode: bool = False,
         benchmark_network_latency_min_ms: float = 0.0,
         benchmark_network_latency_max_ms: float = 0.0,
@@ -157,6 +164,10 @@ class Node:
         self.query_timeout = query_timeout
         self.query_connect_timeout = query_connect_timeout
         self.routing_policy = get_routing_policy(routing_policy)
+        self.capability_advertise_interval_s = max(
+            1.0,
+            float(capability_advertise_interval_s),
+        )
         self._capability_scored = False
 
         # Seed is useful for tests
@@ -452,6 +463,11 @@ class Node:
             "one low score in [0.1, 0.45]",
         )
         log("NODE", f"Advertise address mode: {self.advertise_address_mode}")
+        log(
+            "NODE",
+            f"DHT capability advertise interval: "
+            f"{self.capability_advertise_interval_s:.1f}s",
+        )
         log("NODE", f"Peer query response timeout: {self.query_timeout:.0f}s")
         log("NODE", f"Peer query connect timeout: {self.query_connect_timeout:.0f}s")
         log("ROUTING", f"Routing policy: {self.routing_policy.name}")
@@ -592,7 +608,10 @@ class Node:
             trio.open_nursery() as nursery,
         ):
             async with self.dht_service.run():
-                nursery.start_soon(self.periodically_advertise_capabilities_to_dht)
+                nursery.start_soon(
+                    self.periodically_advertise_capabilities_to_dht,
+                    self.capability_advertise_interval_s,
+                )
                 if api_port is not None:
                     from src.services.node_api_service import NodeAPIService
 

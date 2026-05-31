@@ -3,6 +3,8 @@ import json
 
 from abc import ABC, abstractmethod
 
+from src.model_defaults import DEFAULT_LOCAL_MODEL_ID, DEFAULT_OLLAMA_MODEL
+
 
 class LocalAgent(ABC):
     @abstractmethod
@@ -26,7 +28,7 @@ class DummyAgent(LocalAgent):
 class LocalTransformersAgent(LocalAgent):
     def __init__(
         self,
-        model_id: str = "Qwen/Qwen3-1.7B",
+        model_id: str = DEFAULT_LOCAL_MODEL_ID,
         max_new_tokens: int = 512,
         system_prompt: str | None = None,
         temperature: float = 0.7,
@@ -111,7 +113,7 @@ class LocalTransformersAgent(LocalAgent):
 class OllamaAgent(LocalAgent):
     def __init__(
         self,
-        model: str = "qwen3:1.7b",
+        model: str = DEFAULT_OLLAMA_MODEL,
         host: str = "http://localhost:11434",
         system_prompt: str | None = None,
         timeout_s: float = 300.0,

@@ -30,10 +30,6 @@ def require_env(name: str) -> str:
     return value
 
 
-def optional_env(name: str, default: str = "") -> str:
-    return os.environ.get(name, default)
-
-
 def env_float(name: str) -> float:
     return float(require_env(name))
 
