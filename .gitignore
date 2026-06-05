@@ -216,6 +216,8 @@ benchmarks/output/
 
 outputs/
 
+# Keep the report source, bibliography, settings, and figures versioned so the
+# PDF can be reproduced. Ignore only generated LaTeX build artifacts.
 report/*.aux
 report/*-blx.bib
 report/*.bbl
@@ -226,5 +228,3 @@ report/*.out
 report/*.run.xml
 report/*.toc
 report/*.xdv
-
-report/

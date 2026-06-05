@@ -5,7 +5,11 @@ Decentralized Intelligence Access Layer.
 Beyond Centralized AI: Peer-to-Peer Discovery and Routing for Distributed LLM
 Services.
 
-This project runs a local network of libp2p nodes. Each node advertises its
+This work was completed as a semester project at EPFL's Distributed Computing
+Laboratory (DCL), headed by Prof. Rachid Guerraoui, under the supervision of
+Zicong Hong.
+
+DIAL runs a local network of libp2p nodes. Each node advertises its
 capabilities through a Kademlia DHT; an entry node classifies a query, discovers
 suitable peers, and either answers locally or forwards the query to a peer with
 a suitable routing score.
@@ -350,3 +354,6 @@ while debugging.
   peer's full profile directly when they need detailed scores.
 - GossipSub support exists but is still experimental; leave it disabled for
   normal local runs.
+Semester project carried out at the Distributed Computing Laboratory (DCL), EPFL, headed by Prof. Rachid Guerraoui and supervised by Zicong Hong.
+
+Alexander Wohlfahrt, May 2026
