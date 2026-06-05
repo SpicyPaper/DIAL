@@ -1,0 +1,92 @@
+\section{Related Work}
+
+Chapter 2 explained why the project uses a lightweight peer-to-peer discovery
+layer. This chapter has a different purpose: it positions DIAL relative to
+existing systems and papers. The main point is that DIAL combines two families
+of ideas that are often studied separately: peer-to-peer discovery and LLM
+routing.
+
+\subsection{Peer-to-Peer Discovery and Decentralized Serving}
+
+The networking part of DIAL follows the peer-to-peer tradition. Kademlia
+provides the structured DHT idea used to locate providers by key
+\citep{maymounkov2002kademlia}, while libp2p provides practical building
+blocks for peer identity, transports, protocols, and DHT participation
+\citep{libp2p}. BitTorrent and IPFS are useful background because they show
+that open networks can coordinate resource exchange and content retrieval
+without relying on a central content server
+\citep{cohen2003bittorrent,benet2014ipfs}.
+
+DIAL applies this pattern to LLM services rather than files or content blocks.
+Each peer is treated as a service with a profile and a model backend. This
+differs from systems such as Petals, which distribute parts of one large model
+across many machines \citep{borzunov2023petals}. It is closer in spirit to
+decentralized serving overlays such as PlanetServe, but DIAL studies a smaller
+question in a local prototype: whether peers can advertise capabilities,
+discover each other, and route queries measurably \citep{fang2026planetserve}.
+Work such as Lattica is also relevant because open AI networks eventually need robust
+connectivity across difficult network conditions, but that is outside the
+evaluated scope here \citep{yang2025lattica}.
+
+\subsection{LLM Routing, User Needs, and Model Profiles}
+
+The routing part of DIAL connects to work on choosing between models. FrugalGPT
+and RouteLLM show that model selection can trade off quality, cost, and
+latency instead of sending every prompt to the same model
+\citep{chen2023frugalgpt,ong2025routellm}. Surveys of routing and cascading
+place these systems in a wider family of decision layers for LLM applications
+\citep{moslem2026dynamicrouting}.
+
+A related question is what a user request should be classified into before it
+can be routed. TUNA studies real human-AI conversations and organizes user
+needs into broad modes such as information seeking, synthesis, procedural
+guidance, content creation, social interaction, and meta-conversation
+\citep{shelby2025tuna}. Super-NaturalInstructions and HELM are useful from the
+task and evaluation side: they show that language-model behavior is commonly
+studied through families of tasks rather than one single capability
+\citep{wang2022supernaturalinstructions,liang2022helm}. These works do not
+define DIAL's exact eight labels, but they support the choice to use a small,
+interpretable set of common request families for a prototype router.
+
+For DIAL, the most important lesson is that routing needs profiles. Universal
+Model Routing, RouteProfile, and vLLM Semantic Router all represent models or
+requests with richer signals than a model name alone
+\citep{jitkrittum2025uniroute,xu2026routeprofile,vllmsemanticrouter2026}. DIAL
+uses a simpler capability vector because the goal is not to design the best
+semantic router. The goal is to make profile-based routing work across peers
+that are discovered dynamically through the network.
+
+\subsection{Agent Discovery and PPAI}
+
+PPAI is the closest conceptual neighbor because it describes personalized edge
+LLM agents that can be matched to user demand through query-agent scoring and
+load-aware delegation \citep{wang2026ppai}. DIAL does not implement the full
+PPAI matching algorithm. Instead, it implements the lower layer that such a
+system would need: peers join, publish capabilities, exchange profiles, route a
+query, and expose traces that can be inspected.
+
+Recent agent-discovery work makes the same infrastructure problem explicit.
+Agents need to announce capabilities, be found, be ranked, and remain usable
+as peers join, leave, or fail \citep{guo2026agentdiscovery}. Usable agent
+discovery also notes that node availability and service readiness are related
+but distinct problems
+\citep{dazzi2026usableagentdiscovery}. For DIAL, this means discovery is only
+the first step: the router still needs profile and availability information to
+choose between candidates.
+
+\subsection{Future Layers: Aggregation, Privacy, and Trust}
+
+The current system selects one node to answer a query. The papers below are
+useful mainly because they show what could be layered on top of that first
+routing step. LLM-Blender and Mixture-of-Agents show that multiple model
+outputs can be ranked, fused, or layered to improve quality in multi-model settings
+\citep{jiang2023llmblender,wang2024mixtureofagents}. LLM-as-a-Verifier is
+relevant if future versions need a separate model to judge routed answers
+\citep{kwok2026llmverifier}. Privacy-preserving routing, verifiable inference,
+and blockchain-based AI trust work point to mechanisms that become relevant if
+the network moves beyond controlled local experiments and into open deployments
+\citep{wu2026privacyrouting,wang2026verillm,nassar2020blockchain}.
+
+These papers do not describe what DIAL already implements. They clarify the
+layers that would be needed after discovery and routing: answer aggregation,
+privacy policies, stronger identity, reputation, and verification.

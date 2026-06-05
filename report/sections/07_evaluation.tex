@@ -1,0 +1,297 @@
+\section{Evaluation}
+
+\subsection{Evaluation Goals}
+
+The benchmark suite evaluates the routing layer of DIAL under controlled local
+conditions. It does not evaluate natural-language answer quality. During these
+runs, capability requirements are provided directly by the benchmark and the
+selected node returns a dummy response. This keeps the measurement focused on
+the distributed system: discovery, profile fetching, scoring, recommendation,
+forwarding, and failure handling.
+
+The goal is therefore not to prove that DIAL is ready for a public deployment.
+The results show whether the prototype can route requests correctly under
+controlled conditions, and where the current discovery and failure-handling
+logic starts to weaken. They do not validate real LLM answer quality, public
+network behavior, NAT traversal, provider trust, or privacy guarantees.
+
+The latest benchmark snapshot contains 3,810 queries across 38 executed run
+folders. Overall, 90.4\% of queries completed successfully, 63.6\% selected the
+best active peer according to the pure capability-quality oracle, and 77.8\%
+selected a top-3 peer. The average selected-to-oracle quality ratio was
+81.8\%.
+The failures were concrete: 276 queries ended with \texttt{no\_suitable\_node}
+and 91 ended with a timeout.
+
+The main metrics are:
+
+\begin{itemize}
+  \item \textbf{success rate}: fraction of queries returning a valid response;
+  \item \textbf{top-1 accuracy}: whether the selected peer was the best active
+  peer by pure capability quality;
+  \item \textbf{top-3 accuracy}: whether the selected peer was among the three
+  best active peers by pure capability quality;
+  \item \textbf{quality ratio}: selected peer quality divided by oracle peer
+  quality;
+  \item \textbf{routing latency}: time spent in discovery, profile exchange,
+  scoring, and forwarding decisions;
+  \item \textbf{p95 end-to-end latency}: tail latency observed by the benchmark
+  client;
+  \item \textbf{candidate count}: how many peers were evaluated by the router;
+  \item \textbf{candidate coverage}: evaluated candidates divided by active
+  nodes.
+\end{itemize}
+
+For readability, rates and quality ratios are written as percentages in the
+text. The tables and plots keep the same quantities on a 0--1 scale.
+
+Top-1 accuracy is deliberately strict. DIAL is not meant to send every request
+to the same highest-quality peer; it should choose a suitable peer while also
+considering reachability, latency, freshness, and eventually load. For this
+reason, quality ratio, top-3 accuracy, and candidate coverage are often more
+useful than top-1 alone.
+
+One detail matters when reading the latency numbers. The benchmark runner uses
+a client-side timeout configured per scenario, while each node also has its own
+peer-query timeout. When a p95 value is close to 90, 120, 150, or 180 seconds,
+it usually means some requests waited until a benchmark timeout. These values
+should therefore be read as timeout pressure, not as normal response time for a
+successful route.
+
+\subsection{Clean and Latency Runs}
+
+The first result is positive: the basic routing path works. In clean 8-node
+runs, every query completed and the selected peer was almost always the oracle
+peer. Moderate simulated latency also remained stable. The 50--150 ms latency
+run still achieved 100\% success and a 99.6\% quality ratio.
+
+\begin{table}[H]
+\centering
+\caption{8-node baseline and latency results.}
+\begin{tabular}{lrrrrrr}
+\toprule
+\textbf{Scenario} & \textbf{Queries} & \textbf{Success} & \textbf{Top-1} & \textbf{Top-3} & \textbf{Quality} & \textbf{P95 ms} \\
+\midrule
+No latency & 120 & 1.000 & 0.967 & 1.000 & 0.991 & 277 \\
+50--150 ms latency & 120 & 1.000 & 0.983 & 1.000 & 0.996 & 4,262 \\
+100--500 ms latency & 120 & 0.917 & 0.867 & 0.917 & 0.899 & 120,023 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+High latency is different. At 100--500 ms simulated delay, success fell to
+91.7\%, and the p95 end-to-end latency reached the scenario's 120-second
+timeout range. This does not mean the score formula suddenly became bad, or
+that successful answers normally take that long. It means too many requests
+wait on slow network operations or failed forwards until the benchmark timeout
+is reached. Better timeout handling and more parallel discovery would matter
+more than small score-weight changes here.
+
+In short, DIAL handles clean and moderate-latency routing well, but it should
+fail faster when network operations become very slow.
+
+\subsection{Scalability and Candidate Visibility}
+
+The scalability campaign is the most important stress test. It keeps latency at
+50--150 ms and grows the network from 8 to 128 nodes. Success remains high, but
+quality degrades as the network grows: at 128 nodes, success is still 84.2\%,
+but the quality ratio is 59.1\% and top-1 accuracy is only 17.5\%.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}
+\begin{axis}[
+  width=0.92\textwidth,
+  height=6.1cm,
+  xlabel={Number of nodes},
+  ylabel={Metric value},
+  xmin=0,
+  xmax=136,
+  ymin=0,
+  ymax=1.05,
+  grid=major,
+  legend style={
+    at={(0.5,1.03)},
+    anchor=south,
+    draw=none,
+    fill=none,
+    legend columns=2,
+    /tikz/every even column/.append style={column sep=0.45cm}
+  }
+]
+\addplot[color=deepblue,mark=*] coordinates {
+  (8,1.000) (16,0.950) (32,0.942) (64,0.858) (128,0.842)
+};
+\addplot[color=epflred,mark=square*] coordinates {
+  (8,0.989) (16,0.924) (32,0.804) (64,0.618) (128,0.591)
+};
+\addplot[color=grayblack,mark=triangle*] coordinates {
+  (8,0.958) (16,0.708) (32,0.433) (64,0.225) (128,0.175)
+};
+\addplot[color=blue!55!cyan,mark=diamond*] coordinates {
+  (8,0.353) (16,0.277) (32,0.187) (64,0.083) (128,0.038)
+};
+\legend{Success, Quality ratio, Top-1, Candidate coverage}
+\end{axis}
+\end{tikzpicture}
+\caption{Scaling exposes the candidate-visibility bottleneck. The router still often completes the query, but it evaluates a shrinking share of the active network as node count grows.}
+\end{figure}
+
+The reason is visible in candidate coverage. At 8 nodes, the router evaluates
+about 35\% of active nodes. At 128 nodes, it evaluates only about 3.8\%. Since
+the oracle is computed over all active profiles, larger networks create more
+opportunities for a better node to exist somewhere outside the evaluated set.
+This should not be read as a failure by itself. In a larger decentralized
+network, finding the exact top-1 or top-3 peer naturally becomes harder because
+there are more possible competitors, and DIAL should not concentrate all
+traffic on the same strongest nodes. The goal is to find a suitable peer and
+eventually spread load across the network. Still, the simultaneous drop in
+candidate coverage and quality ratio shows that discovery should improve for
+larger deployments. The implemented recommendation step already moves in this
+direction by letting peers suggest additional candidates, but it remains a
+conservative one-hop mechanism with a small per-peer limit. Further work should
+tune DHT/provider lookup behavior, return or refresh more useful providers per
+capability, improve recommendation diversity, and explore bounded multi-hop
+candidate expansion.
+
+\subsection{Dropout}
+
+The dropout campaign starts a 24-node network, kills a fraction of non-entry
+nodes, waits briefly, and then sends queries. Dropout reduces the candidate
+pool and increases \texttt{no\_suitable\_node}. The trend is not perfectly
+monotonic, because the removed nodes depend on the sampled dropout set, but the
+direction is clear: fewer active useful peers lead to weaker quality and long
+tail latency.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}
+\begin{axis}[
+  width=0.92\textwidth,
+  height=6.1cm,
+  xlabel={Dropout rate},
+  ylabel={Rate or ratio},
+  ymin=0,
+  ymax=1.05,
+  grid=major,
+  symbolic x coords={0,25,50,75},
+  xtick=data,
+  legend style={
+    at={(0.5,1.03)},
+    anchor=south,
+    draw=none,
+    fill=none,
+    legend columns=3,
+    /tikz/every even column/.append style={column sep=0.45cm}
+  }
+]
+\addplot[color=deepblue,mark=*] coordinates {(0,0.958) (25,0.892) (50,0.833) (75,0.875)};
+\addplot[color=epflred,mark=square*] coordinates {(0,0.904) (25,0.801) (50,0.747) (75,0.716)};
+\addplot[color=grayblack,mark=triangle*] coordinates {(0,0.858) (25,0.775) (50,0.783) (75,0.842)};
+\legend{Success, Quality ratio, Top-3}
+\end{axis}
+\end{tikzpicture}
+\caption{Dropout lowers routing quality and keeps tail latency near timeout-bound values. The 75\% case has a small success rebound in this run, but its quality ratio and candidate count remain weak.}
+\end{figure}
+
+At 50\% dropout, success is 83.3\%, quality ratio is 74.7\%, and p95 end-to-end
+latency is about 60 seconds. The average candidate count falls from 5.63 with
+no dropout to 2.71 at 50\% dropout and 1.86 at 75\% dropout. This is still
+encouraging: even after many peers disappear, the prototype usually returns an
+answer. The cost is weaker candidate visibility, which makes weaker selections
+more likely. Dropout should mainly be read as a discovery and liveness problem.
+
+\subsection{Mixed-Capability Queries}
+
+Mixed-capability queries are important because real prompts often require more
+than one skill. The clean 24-node mixed run is strong: all 45 queries complete,
+top-3 accuracy is 100\%, and the quality ratio is 99.0\%. This shows that the
+weighted capability model can work when the network is visible and fast.
+
+\begin{table}[H]
+\centering
+\caption{Mixed-capability results under clean, latency, and dropout settings.}
+\begin{tabular}{lrrrrr}
+\toprule
+\textbf{Scenario} & \textbf{Success} & \textbf{Top-1} & \textbf{Top-3} & \textbf{Quality} & \textbf{P95 ms} \\
+\midrule
+24 nodes, clean & 1.000 & 0.956 & 1.000 & 0.990 & 2,325 \\
+16 nodes, 50--150 ms & 0.756 & 0.600 & 0.622 & 0.687 & 90,029 \\
+16 nodes, 100--500 ms & 0.711 & 0.489 & 0.533 & 0.618 & 120,026 \\
+24 nodes, 25\% dropout & 0.733 & 0.511 & 0.600 & 0.662 & 120,026 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The same workload becomes much harder once latency or dropout is added. Mixed
+queries force the router to find peers that are good across several capability
+dimensions, so narrow candidate discovery hurts more than in single-capability
+queries. The practical improvement is to collect candidates per relevant
+capability, keep more than one provider per capability, and then score the
+combined requirement after deduplication. The rows with p95 values near 120
+seconds should again be read as timeout-bound failures, not as normal response
+times for completed answers.
+
+In short, the clean run validates the weighted capability representation. The
+stressed runs show that multi-capability routing needs broader candidate
+collection before the scoring formula can really help.
+
+\subsection{Policy Comparison}
+
+The policy runs compare five routing policies in four contexts: clean,
+high-latency, 50\% dropout, and mixed-capability workloads. The winner changes
+by context, which is useful: it shows that policy design matters. But it also
+shows that policy tuning alone cannot fix low candidate coverage or long
+timeouts.
+
+\begin{table}[H]
+\centering
+\caption{Best policy by context in the latest benchmark snapshot.}
+\begin{tabular}{llrrrr}
+\toprule
+\textbf{Context} & \textbf{Best policy} & \textbf{Success} & \textbf{Top-1} & \textbf{Quality} & \textbf{P95 ms} \\
+\midrule
+Clean & \texttt{latency\_aware} & 1.000 & 0.842 & 0.948 & 1,365 \\
+High latency & \texttt{capability\_only} & 0.925 & 0.517 & 0.813 & 60,039 \\
+50\% dropout & \texttt{balanced} & 0.858 & 0.608 & 0.777 & 66,622 \\
+Mixed & \texttt{reliability\_aware} & 0.867 & 0.689 & 0.787 & 150,014 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+In clean runs, all policies reach 100\% success and differences are small. Under
+high latency, \texttt{capability\_only} performs best in this dataset, which is
+slightly counterintuitive but informative: adding latency penalties does not
+create better candidates, and under slow network operations it can still spend
+time evaluating or forwarding to poor paths. Under dropout, \texttt{balanced}
+does best, while mixed workloads benefit most from \texttt{reliability\_aware}.
+These results should not be read as a final policy choice. They are better read
+as evidence that future policy studies should use more contrasted weights and
+scenarios designed to isolate one trade-off at a time. The large p95 value in
+the mixed row is also tied to the benchmark's 150-second scenario timeout.
+The comparison is still useful: policy tuning can improve selection among
+visible peers, but it cannot compensate for candidates that were never
+discovered.
+
+\subsection{Evaluation Summary}
+
+The benchmark supports four main conclusions:
+
+\begin{enumerate}
+  \item The end-to-end DIAL routing path works. Clean and moderate-latency
+  results show that nodes can advertise capabilities, discover peers, select a
+  suitable node, and return a response.
+  \item The main weakness is candidate visibility. As the network grows, the
+  router evaluates a smaller share of active nodes, so the best peer is more
+  likely to remain unseen.
+  \item Dropout and high latency mostly hurt through stale or slow paths. They
+  increase failed routes, timeout-bound latency, and quality loss.
+  \item Mixed-capability routing works in clean conditions but needs broader
+  candidate collection when latency, dropout, or larger networks are involved.
+\end{enumerate}
+
+The report therefore focuses on the plots and tables that explain these
+points. The short version is that DIAL routes well when the network is small
+and visible; the next engineering work is broader discovery through DHT tuning
+and bounded recommendations, faster failed-peer handling, and more deliberate
+multi-capability candidate collection.

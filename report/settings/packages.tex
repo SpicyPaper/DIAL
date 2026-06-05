@@ -1,0 +1,96 @@
+\usepackage[english]{babel}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\renewcommand*\familydefault{\sfdefault}
+
+\usepackage{geometry}
+\geometry{
+  left=24mm,
+  right=24mm,
+  top=30mm,
+  bottom=28mm,
+  headheight=20mm
+}
+
+\usepackage{microtype}
+\setlength{\emergencystretch}{3em}
+\usepackage{setspace}
+\setstretch{1.05}
+
+\usepackage[table]{xcolor}
+\definecolor{epflred}{RGB}{226,0,26}
+\definecolor{deepblue}{RGB}{24,64,102}
+\definecolor{softblue}{RGB}{232,241,250}
+\definecolor{softred}{RGB}{252,235,238}
+\definecolor{softgreen}{RGB}{235,247,238}
+\definecolor{softyellow}{RGB}{255,247,220}
+\definecolor{grayblack}{RGB}{45,45,45}
+\definecolor{grayline}{RGB}{220,224,230}
+\definecolor{graybg}{RGB}{247,248,250}
+
+\usepackage{graphicx}
+\graphicspath{{./figures/}}
+\usepackage[hypcap,font={small,color=grayblack},labelfont=bf]{caption}
+\usepackage{float}
+
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage{array}
+\usepackage{enumitem}
+\setlist[itemize]{leftmargin=1.4em,itemsep=0.2em,topsep=0.2em}
+\setlist[enumerate]{leftmargin=1.6em,itemsep=0.2em,topsep=0.2em}
+
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{mathtools}
+
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,positioning,fit,calc,shapes.geometric}
+\usepackage{pgfplots}
+\usepackage{pgfplotstable}
+\pgfplotsset{compat=1.18}
+
+\usepackage{titlesec}
+\titleformat{\section}{\color{deepblue}\normalfont\Large\bfseries}{\thesection}{0.8em}{}
+\titleformat{\subsection}{\color{deepblue}\normalfont\large\bfseries}{\thesubsection}{0.8em}{}
+\titleformat{\subsubsection}{\color{deepblue}\normalfont\normalsize\bfseries}{\thesubsubsection}{0.8em}{}
+\usepackage{needspace}
+\usepackage{etoolbox}
+\pretocmd{\section}{\Needspace{0.25\textheight}}{}{}
+\pretocmd{\subsection}{\Needspace{5\baselineskip}}{}{}
+\pretocmd{\subsubsection}{\Needspace{4\baselineskip}}{}{}
+
+\usepackage{fancyhdr}
+\usepackage{lastpage}
+\pagestyle{fancy}
+\fancyhf{}
+\lhead{\small \reportauthor}
+\chead{\small DIAL}
+\rhead{\small \reportdate}
+\lfoot{\small \reporttitle}
+\rfoot{\small \thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+\renewcommand{\footrulewidth}{0.4pt}
+
+\usepackage{xurl}
+\urlstyle{sf}
+\usepackage{csquotes}
+\usepackage[
+  colorlinks=true,
+  citecolor=deepblue,
+  urlcolor=deepblue,
+  linkcolor=deepblue
+]{hyperref}
+
+\usepackage[
+  backend=bibtex,
+  style=numeric-comp,
+  sorting=none,
+  sortcites=true,
+  natbib=true,
+  url=true,
+  doi=true,
+  isbn=false
+]{biblatex}
+\addbibresource{bibliography/biblio.bib}

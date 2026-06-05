@@ -1,0 +1,229 @@
+\section{Implementation}
+
+\subsection{Repository Organization}
+
+The prototype is implemented in Python. Runtime code lives under
+\texttt{src/}, command-line entry points under \texttt{src/cli/}, evaluation
+drivers under \texttt{benchmarks/}, scenario definitions under
+\texttt{benchmarks/scenarios/}, and DIAL Chat under \texttt{src/ui/}. The
+repository is organized around the main system responsibilities:
+
+\begin{itemize}
+  \item \texttt{node.py} and \texttt{models.py} define the node runtime and
+  shared data structures;
+  \item the service modules implement discovery, profile exchange,
+  recommendation requests, and query forwarding;
+  \item \texttt{routing\_service.py} and \texttt{routing\_policy.py} implement
+  capability matching, scoring, and node selection;
+  \item \texttt{node\_api\_service.py} and \texttt{web\_app.py} expose the node
+  API and DIAL Chat;
+  \item \texttt{benchmarks/run\_benchmark.py} and
+  \texttt{benchmarks/scenarios/} drive the local evaluation workloads.
+\end{itemize}
+
+Other files support this core path with environment loading, logging, backend
+adapters, health checks, protocol helpers, and small development utilities.
+The command-line tools and scripts are used to start nodes, launch local
+networks, inspect discovery behavior, and run diagnostic queries. The main
+user-facing interface is DIAL Chat, which lives under \texttt{src/ui/} and is
+described later in this chapter.
+
+The public source code is available at \url{https://github.com/SpicyPaper/DIAL}.
+
+\subsection{Node Runtime and Startup}
+
+A single node can be started with \texttt{src/cli/run\_node.py}, while a local
+network of several nodes can be launched with
+\texttt{scripts/start\_network.sh}. Both read their configuration from the
+project \texttt{.env} file; full setup instructions are kept in the project
+\texttt{README}.
+
+When a node starts, it creates a libp2p host, derives its peer identity,
+initializes its profile, connects to bootstrap peers, starts the DHT service,
+and advertises its top capabilities. The network script launches several nodes
+with different ports, model names, and profiles. Runtime state is written under
+\texttt{.runtime/}.
+
+The provided local setup advertises IPv6 loopback multiaddresses
+(\texttt{/ip6/::1/...}) because this was the local address mode used by the
+test machine when several nodes were run on one host. This is a deployment
+choice, not a routing assumption. libp2p
+multiaddresses can describe different network addresses and transport paths
+\citep{libp2paddressing}, so supporting IPv4, public IPv6, or relay-based
+addresses such as circuit relay paths \citep{libp2pcircuitrelay} would mainly
+require extending the address-selection mode, launch configuration, and
+connectivity tests.
+
+The concrete \texttt{NodeProfile} dataclass contains the fields needed by this
+runtime: \texttt{peer\_id}, reachable \texttt{addresses}, \texttt{model\_name},
+\texttt{advertised\_capabilities}, full \texttt{capability\_scores},
+\texttt{is\_available}, and \texttt{timestamp\_ms}. Architecturally, these are
+the profile data described in Chapter 4; here they become concrete fields used
+by discovery, caching, and routing.
+
+Capabilities are set when the node starts. A node receives configured
+capabilities or role hints, and the local capability scorer turns them into a
+deterministic profile: usually one strong primary capability and weaker
+secondary capabilities. These scores are routing metadata, not measurements of
+the model's real skill, because the project focuses on discovery and routing
+rather than benchmarking the LLM itself.
+
+\subsection{LLM Backends and Prompts}
+
+The \texttt{LocalAgent} abstraction supports several model execution modes:
+
+\begin{itemize}
+  \item \textbf{dummy}: deterministic placeholder responses for tests and
+  controlled routing runs;
+  \item \textbf{Ollama}: local inference through an Ollama server, recommended
+  for demos;
+  \item \textbf{AIaaS}: EPFL OpenAI-compatible inference API;
+  \item \textbf{local Transformers}: a Hugging Face Transformers backend for
+  fully local model loading.
+\end{itemize}
+
+This modularity matters because a decentralized AI network should not assume
+one runtime. A node may call a model from a local GPU, CPU runtime,
+institutional API, or specialized inference engine.
+
+The local network is intentionally easy to run. Normal usage defaults to Ollama
+with the configured Qwen3 4B model \citep{ollama}; controlled runs can also use
+a dummy backend when the goal is to exercise routing without generation
+variance.
+
+In real runs, answer quality depends on the chosen backend model and on the
+system prompt used for the node. This is expected: prompting choices can change
+LLM behavior and robustness \citep{schulhoff2025promptreport,zhu2024promptrobust}.
+The prompts used in this prototype are basic role prompts, not optimized prompts
+or a contribution of the project.
+
+For practical reasons, the provided local network script normally launches
+several nodes against the same configured LLM backend. This is a
+resource-friendly demo setup, not an architectural restriction: each node process
+has its own peer identity, advertised profile, routing state, and system prompt,
+and custom launches can use different backend configurations. Backend calls are
+stateless unless conversation context is explicitly sent, so one node does not
+automatically remember another node's previous conversation.
+
+\subsection{LLM-Based Capability Classification}
+
+In normal interactive use, the entry node uses a classifier LLM to map the user
+prompt to capability scores. The supported capability set includes general,
+math, programming, writing, summarization, research, planning, and creative
+tasks. The classifier is guided by a dedicated system prompt and returns a small
+JSON object of scores, which makes classification an explicit routing step
+rather than an unstructured chat response.
+
+The classifier output is not a final node choice. It is a compact description of
+what the query needs, and the router keeps at most the top three capabilities
+for discovery and scoring. Its quality depends on the selected classifier model
+and prompt, so controlled evaluation runs can bypass this LLM step by injecting
+\texttt{required\_capabilities} directly. This lets Chapter 7 evaluate the
+network and routing behavior without also measuring classifier quality.
+
+\subsection{Routing and Query Execution}
+
+The routing implementation connects classification, discovery, and execution.
+For each query, \texttt{routing\_service.py} normalizes the required
+capabilities, searches the DHT for peers advertising the relevant capabilities,
+fetches full profiles through the profile protocol, stores them in the peer
+registry, checks candidate liveness, and computes the routing score. The first
+candidate pool contains the local node and available matching registry profiles
+after this DHT refresh. If no candidate in that pool passes the threshold, the
+recommendation protocol asks eligible remote candidates for additional peer IDs.
+Those recommended peers are fetched and scored with the same routing logic.
+
+Once a candidate is selected, \texttt{query\_service.py} performs the execution
+step. If the selected candidate is the local node, the node calls its local
+agent directly. If the selected candidate is remote, the query is forwarded
+through the query protocol and the selected peer calls its own bound LLM
+backend. The response is then returned to the entry node and back to the
+client.
+
+\subsection{HTTP API and DIAL Chat}
+
+Each node exposes a small HTTP API through FastAPI \citep{fastapi}:
+
+\begin{itemize}
+  \item \texttt{POST /api/query}: submit a query to the node;
+  \item \texttt{GET /api/query/progress/<query\_id>}: read routing progress
+  events;
+  \item \texttt{GET /api/profile}: inspect the node profile.
+\end{itemize}
+
+DIAL Chat reads available entry-node APIs from runtime configuration and
+presents a conversational interface. A user can choose an entry node, send a
+prompt, keep a conversation, and see how much recent context will be sent with
+the next request. The context meter makes clear that long conversations remain
+in the interface, while only the recent context window is included in the
+network request.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\textwidth]{DIALChatUserQuery.png}
+\caption{DIAL Chat main interface. The user selects an entry node, sends a query, and sees the recent conversation context that will be included in the next network request.}
+\label{fig:dial-chat-main}
+\end{figure}
+
+DIAL Chat also exposes routing progress events: classification, DHT lookup,
+candidate evaluation, recommendation, selection, forwarding, and answer
+generation. This makes the prototype easier to inspect because the user can see
+which node answered and why the routing path took time.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\textwidth]{DIALChatWithNetworkDetails.png}
+\caption{DIAL Chat network details panel. The interface shows timing information, required capabilities, candidate evaluation, and the selected peer that generated the answer.}
+\label{fig:dial-chat-network-details}
+\end{figure}
+
+\subsection{Evaluation Harness}
+
+The evaluation runner starts local networks, injects scenario parameters, sends
+queries, records routing traces, and writes summaries. It can vary network size,
+latency, dropout, workload mix, and routing policy. Chapter 7 describes the
+actual scenarios and results.
+
+The harness is designed to evaluate the network and routing layer, not the
+underlying LLMs. During benchmark runs, both the answer backend and classifier
+backend are set to \texttt{dummy}. Benchmark queries also provide
+\texttt{required\_capabilities} directly in the API request, so the classifier is
+not called: the scenario defines the capability scores that the router should
+use. The selected node then returns a dummy answer instead of an LLM-generated
+one. This keeps the measured results focused on discovery, scoring,
+recommendation, forwarding, and failure handling. In normal interactive use, by
+contrast, the required capabilities come from the classifier LLM and the selected
+node calls its configured LLM backend.
+
+\subsection{Implementation Limitations}
+
+The current prototype is the result of a semester project, not a production
+network. Some mechanisms are therefore simplified deliberately so the project
+can focus on building and measuring the decentralized discovery and routing
+layer:
+
+\begin{itemize}
+  \item capability scores are configured or simulated routing metadata, not
+  measurements of real model skill;
+  \item Gossipsub is implemented only as an optional profile-update notification
+  path; normal local runs rely on DHT lookup and direct peer protocols;
+  \item nodes have libp2p peer identities, but profiles are not signed and the
+  prototype does not implement a trust mechanism for verifying advertised
+  capabilities;
+  \item unreachable peers are handled after failed connection or response
+  attempts: the peer is marked unavailable, excluded, and routing is retried,
+  but this availability information is not yet shared with the rest of the
+  network;
+  \item evaluation runs on a local machine with IPv6 loopback addresses and
+  does not validate IPv4/public IPv6 addressing, NAT traversal, relay behavior,
+  wide-area network behavior, or real provider heterogeneity;
+  \item malicious behavior, false capability advertisements, and generated
+  answer correctness are outside the evaluated scope;
+  \item incentive, payment, and reputation systems are future work.
+\end{itemize}
+
+These limitations clarify the result rather than weaken it. As Chapter 7 shows,
+DIAL is a working prototype and gives encouraging routing results in the tested
+local scenarios. Several missing pieces, including stronger verification,
+reputation, incentives, privacy, and richer failure handling, are discussed as
+future improvements in Chapter 8.

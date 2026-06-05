@@ -1,0 +1,172 @@
+\section{System Architecture}
+
+\subsection{Design Principles}
+
+The system was designed around four principles.
+
+\textbf{Every node is symmetric.} There is no permanent gateway: any node can
+receive a query, route it, and answer if selected.
+
+\textbf{Discovery is decentralized.} Nodes advertise capabilities through a
+Kademlia DHT instead of a central registry \citep{maymounkov2002kademlia}.
+
+\textbf{Profiles extend DHT hints.} The DHT stores lightweight capability
+advertisements; full profiles are fetched directly for finer routing decisions.
+
+\textbf{The node answer backend is modular.} A node can use Dummy for tests,
+Ollama or local Hugging Face Transformers for local inference, and EPFL AIaaS
+for hosted inference.
+
+\subsection{Architecture and Communication Flow}
+
+\begin{center}
+\resizebox{0.98\textwidth}{!}{%
+\begin{tikzpicture}[
+  font=\small,
+  box/.style={draw=deepblue, rounded corners=2pt, thick, align=center,
+    minimum width=3.75cm, minimum height=0.9cm, fill=softblue},
+  core/.style={draw=epflred, rounded corners=2pt, thick, align=center,
+    minimum width=3.75cm, minimum height=0.9cm, fill=softred},
+  store/.style={draw=grayblack, rounded corners=2pt, thick, align=center,
+    minimum width=3.75cm, minimum height=0.9cm, fill=graybg},
+  backend/.style={draw=deepblue, rounded corners=2pt, thick, align=center,
+    minimum width=3.75cm, minimum height=0.9cm, fill=softgreen},
+  group/.style={draw=grayline, rounded corners=6pt, very thick, inner sep=0.5cm},
+  note/.style={draw=grayblack, rounded corners=2pt, align=left,
+    fill=graybg, font=\scriptsize, inner sep=6pt},
+  arrow/.style={-Latex, thick, color=grayblack, rounded corners=6pt},
+  biarrow/.style={Latex-Latex, thick, color=grayblack, rounded corners=6pt}
+]
+
+% Client layer
+\node[box, minimum width=10.2cm] (client) at (0,13.45)
+  {DIAL Chat / HTTP clients};
+
+% Entry node internals
+\node[box, minimum width=4.55cm] (api) at (0,11.75)
+  {Node API (FastAPI)\\query endpoint, progress events};
+\node[box, minimum width=4.55cm] (querysvc) at (0,8.35)
+  {Query service\\receive, execute, or forward};
+\node[core, minimum width=4.55cm] (router) at (0,6.7)
+  {Routing service\\classify, discover, score, select};
+\node[core] (classifier) at (-5.45,5.25)
+  {Capability classifier\\LLM-backed query scores};
+\node[box] (p2p) at (5.0,5.25)
+  {Communication layer (libp2p)\\node connections, protocol streams};
+\node[box] (dhtsvc) at (-5.45,3.75)
+  {DHT service\\Kademlia lookup};
+\node[store] (registry) at (0,3.75)
+  {Peer registry\\profiles + peer status};
+\node[backend, minimum width=4.55cm] (localbackend) at (-4.45,10.2)
+  {Node answer backend\\Ollama, EPFL AIaaS, HF Transformers};
+\node[coordinate] (entryleft) at (-7.55,3.25) {};
+\node[coordinate] (entryright) at (7.55,12.2) {};
+\node[group, fit=(entryleft)(entryright)] (entrygroup) {};
+\node[font=\bfseries\small,text=deepblue,fill=white,inner sep=2pt, anchor=west]
+  at ([xshift=0.45cm,yshift=0.08cm]entrygroup.north west) {Entry node};
+
+% Network layer
+\node[store] (dht) at (-5.45,1.25)
+  {Kademlia DHT\\capability provider IDs};
+\node[box] (streams) at (5.0,1.25)
+  {Peer protocols\\ping, profile, recommendation, query};
+\node[coordinate] (networkleft) at (-7.55,0.85) {};
+\node[coordinate] (networkright) at (7.55,1.65) {};
+\node[group, fit=(networkleft)(networkright)] (networkgroup) {};
+\node[font=\bfseries\small,text=deepblue,fill=white,inner sep=2pt]
+  at ([yshift=0.08cm]networkgroup.north) {Decentralized network layer};
+
+% Remote peer layer
+\node[store] (remoteprofile) at (-5.45,-1.25)
+  {Remote NodeProfile\\addresses, model, capabilities};
+\node[box] (remotequery) at (5.0,-1.25)
+  {Remote peer services\\ping, profile, recommendation, query};
+\node[backend] (remotebackend) at (5.0,-2.85)
+  {Remote answer backend\\selected node model};
+\node[coordinate] (remoteleft) at (-7.55,-3.4) {};
+\node[coordinate] (remoteright) at (7.55,-0.85) {};
+\node[group, fit=(remoteleft)(remoteright)] (remotegroup) {};
+\node[font=\bfseries\small,text=deepblue,fill=white,inner sep=2pt]
+  at ([yshift=0.08cm]remotegroup.north) {Remote nodes};
+
+% Main request path
+\draw[arrow] (client) -- (api);
+\draw[arrow] (api) -- (querysvc);
+\draw[biarrow] (querysvc.west) -- (localbackend.south);
+\draw[biarrow] (querysvc.east) -- (p2p.north);
+
+% Internal entry-node signals
+\draw[biarrow] ([xshift=-1.45cm]router.south) -- (classifier.east);
+\draw[biarrow] (router.south) -- (registry.north);
+\draw[biarrow] (querysvc.south) -- (router.north);
+
+% Discovery path
+\draw[biarrow] ([xshift=-0.45cm]router.south) -- (dhtsvc.east);
+\draw[biarrow] (dhtsvc) -- (dht);
+
+% Direct peer communication and remote execution path
+\draw[biarrow] ([xshift=1.45cm]router.south) -- ([yshift=-0.2cm]p2p.west);
+\draw[biarrow] (p2p) -- (streams);
+\draw[biarrow] (streams) -- (remotequery);
+\draw[arrow] (remotequery.west) -- (remoteprofile.east);
+\draw[biarrow] (remotequery.south) -- (remotebackend.north);
+
+\end{tikzpicture}
+}
+\captionof{figure}{DIAL architecture and communication layers. The upper block shows the services inside the entry node for one request, the middle block shows the decentralized network layer, and the lower block shows other nodes exposing the same peer services and answer backend. Arrows indicate service calls or protocol exchanges.}
+\end{center}
+
+Figure 2 shows the DIAL architecture and how its main blocks communicate. It
+is a component view, not the full query trace. DIAL Chat and HTTP clients submit
+requests through the node API. Some developer command line tools can also
+inspect or test the lower-level libp2p protocols directly. The query service
+owns the request lifecycle: it asks routing for a decision, then calls the node
+answer backend or forwards the query through libp2p.
+
+The routing service owns the selection decision. It classifies the query,
+searches the Kademlia DHT for capability providers, obtains profiles or
+recommendations through peer protocols, and uses the peer registry's profile
+and status information to score candidates. The distinction between entry node
+and remote node is only for one request: all nodes expose the same profile,
+recommendation, query, and answer backend services, so any node can take either
+role. Capability scoring at startup is a supporting mechanism, not part of the
+normal request path.
+
+\subsection{Component Responsibilities}
+
+The system is organized around four main responsibilities. This section
+describes what each part does; Chapter 5 explains the routing algorithm itself.
+
+\textbf{Client and API.} DIAL Chat and HTTP clients submit requests to a node
+API. The API receives prompts and reports progress events, but it does not
+decide which node should answer. Separate command-line tools exist for local
+operation and debugging; some of them use libp2p directly.
+
+\textbf{Routing.} The routing service chooses where a request should run. It
+uses the capability classifier, DHT discovery, peer profiles, recommendations,
+and peer-status information to compare candidates. The DHT only advertises a
+node's main capabilities; full profiles are fetched directly before scoring.
+
+\textbf{Peer-to-peer communication.} The DHT provides coarse discovery by
+capability and returns provider peer IDs. Direct libp2p protocols handle the
+richer exchanges between nodes: pinging peers, fetching profiles, asking for
+recommendations, and forwarding queries. This direct path is enough for the
+current prototype. Gossipsub-style publish/subscribe is more useful when many
+peers need to receive the same event, such as profile-update notifications in a
+larger network \citep{libp2ppubsub}.
+
+\textbf{Execution.} Once a node is selected, the query service either calls the
+node's answer backend or forwards the request to the selected remote node. The
+answer is generated by the selected node's own backend, not by a central model
+service.
+
+\subsection{DIAL Chat}
+
+DIAL Chat is the user-facing web application on top of DIAL. Architecturally,
+it is a client of the node API: it lets a user write prompts, choose an
+available entry node, keep a conversation, and see progress events returned by
+that node. Those events expose the routing process in a readable way:
+classification, DHT lookup, candidate evaluation, recommendation, forwarding,
+and answer generation. This matters because DIAL is meant to be usable by
+normal applications, not only as a backend protocol. The implementation details
+of the web app are described in Chapter 6.

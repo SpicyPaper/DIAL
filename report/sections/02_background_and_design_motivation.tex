@@ -1,0 +1,88 @@
+\section{Background and Design Motivation}
+
+\subsection{Why Decentralize LLM Access?}
+
+DIAL is motivated by a simple gap: as LLM services become more diverse, users
+still need a way to find and use the right one. A centralized platform can
+coordinate discovery, ranking, pricing, and access control, but it also becomes
+the place where those decisions are concentrated. This creates several
+tensions:
+
+\begin{itemize}
+  \item \textbf{Provider concentration}: users often depend on a small number
+  of large providers for availability, pricing, and access to strong models.
+  \item \textbf{Specialization discovery}: niche model providers need a way to
+  be found by clients that need their capabilities.
+  \item \textbf{Privacy and locality}: some requests should stay near a user,
+  institution, or trusted device.
+  \item \textbf{Open participation}: a decentralized service layer should allow
+  a new model provider to join without asking a central operator for
+  permission.
+  \item \textbf{Composable intelligence}: future queries may benefit from
+  several models answering, checking, or debating rather than one monolithic
+  model responding.
+\end{itemize}
+
+The project therefore focuses on one technical layer: service discovery and
+routing. The narrower question is whether peers can advertise what they can do,
+discover each other, compare profiles, and route a query in a measurable way.
+
+\subsection{Lessons from BitTorrent and Peer-to-Peer Systems}
+
+BitTorrent showed that a decentralized network can coordinate resource exchange
+without a central content server \citep{cohen2003bittorrent}. IPFS and libp2p
+generalize related ideas: content addressing, peer discovery, transport
+abstraction, and protocol negotiation \citep{benet2014ipfs,libp2p}. The useful
+analogy is not file sharing itself, but the coordination pattern: a user does
+not need to know in advance which machine will provide the resource.
+
+Here, the resource is an LLM service exposed through a node profile. Peers
+advertise capabilities such as math, programming, writing, research, planning,
+or creative generation. An entry node uses those advertisements to find
+candidates and select an executor. The DHT acts as a decentralized capability
+index, while direct peer protocols retrieve fuller profiles, request
+recommendations, check liveness, and forward queries.
+
+\subsection{Where Blockchain Fits}
+
+Blockchain systems provide shared records that are difficult to modify and a
+common order for transactions \citep{nakamoto2008bitcoin}. These properties
+can be useful for payments, settlement, provenance, and reputation records.
+Blockchain-based AI trust frameworks also use smart contracts, trusted oracles,
+and decentralized storage to support auditability and trust
+\citep{nassar2020blockchain}. However, putting every capability advertisement
+on-chain would impose costly global agreement on a problem that can tolerate
+temporary inconsistency.
+
+DIAL therefore separates \textit{discovery} from future
+\textit{accounting and trust} layers. Discovery needs low-latency updates: if a
+peer leaves, the router can retry or choose another candidate. Payments,
+reputation, and provider commitments need stronger integrity and may later
+benefit from blockchain or other verifiable records. For the prototype, the
+core network is deliberately lighter: libp2p streams for direct communication
+and a Kademlia DHT for capability discovery.
+
+\subsection{The PPAI Angle: Matching Supply and Demand}
+
+PPAI helped shape the project vision because it describes a network where
+personalized edge LLM agents can be matched to user demand instead of leaving
+each user with only one local assistant \citep{wang2026ppai}. The useful idea
+for DIAL is the supply-demand framing: users express demand through queries,
+while providers express supply through profiles, availability, quality, and
+possibly price or reputation.
+
+DIAL narrows that broad idea to a runnable infrastructure layer. Supply becomes
+a \texttt{NodeProfile}; demand becomes a small capability vector produced by a
+classifier; and the DHT provides decentralized discovery. This is simpler than
+PPAI's full matching and
+delegation vision, but it gives that vision a concrete base: peers can be
+found, compared, selected, and measured before richer policies are added.
+
+\subsection{Design Position}
+
+This positions DIAL as an access-layer prototype for decentralized LLM
+services. The implemented focus is peer-to-peer discovery, profile exchange,
+and capability-aware routing. Layers such as trust,
+reputation, payments, privacy policies, and multi-node execution sit above that
+foundation. A DHT does not solve trust or economics, but the network first
+needs a way to find services before it can rank, verify, or reward them.

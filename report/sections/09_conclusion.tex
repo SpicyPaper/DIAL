@@ -1,0 +1,31 @@
+\section{Conclusion}
+
+This project built a working prototype for decentralized LLM service discovery
+and routing. Each node can host or access a language model, advertise
+capabilities, discover peers through libp2p and a Kademlia DHT, classify
+queries, rank candidates, and route execution. The system also includes HTTP
+APIs, DIAL Chat, and a benchmark suite for latency, scale, dropout, and policy
+weights.
+
+The main result is that a peer-to-peer layer is a credible starting point
+for decentralized AI services when its role is clear. In local benchmarks,
+clean and moderate-latency networks route reliably, mixed-capability queries
+work well in clean conditions, and the capability vector model gives a path
+toward richer matching. The evaluation also clarifies that the aim is not to
+route every request to the same strongest node, but to choose suitable peers
+while keeping the network robust. The hard part is clear: candidate visibility
+does not yet scale well enough, and dropout, stale availability information,
+and timeout-heavy failure detection remain important bottlenecks. This points
+first to DHT/provider-discovery tuning, faster failed-peer handling, and
+bounded recommendation expansion. Load-aware routing remains a natural next
+direction once discovery is stronger.
+
+The broader vision is an open AI service network where providers can join,
+advertise specialized models, build reputation, and be selected by transparent
+matching policies. Work on LLM routing, agent discovery, PPAI-style delegation,
+verifier models, and privacy-preserving routing suggests that this is becoming
+an active research direction. Blockchain is not needed for first-layer
+discovery, but may help later with payment settlement and verifiable
+reputation. In that sense, DIAL is best understood as a lightweight P2P
+foundation for discovery and routing today, with a path toward incentives,
+trust, and multi-model collaboration later.

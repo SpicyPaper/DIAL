@@ -1,0 +1,76 @@
+\begin{titlepage}
+\thispagestyle{empty}
+
+\vspace*{0.05cm}
+\begin{center}
+  \includegraphics[width=0.19\textwidth]{logo}
+
+  \vspace{2.8cm}
+  {\fontsize{36}{42}\selectfont \bfseries \reporttitle}
+
+  \vspace{0.35cm}
+  {\Large \color{deepblue}\reportsubtitle}
+
+  \vspace{0.55cm}
+  \parbox{0.86\textwidth}{\centering
+    {\fontsize{19}{26}\selectfont \bfseries \reportdescription}
+  }
+
+  \vspace{0.9cm}
+  \rule{0.76\textwidth}{0.8pt}
+
+  \vspace{0.8cm}
+  {\large \reportlab}
+
+  \vspace{0.2cm}
+  {\normalsize \reporthead}
+
+  \vspace{0.15cm}
+  {\normalsize \reportsupervisor}
+
+  \vfill
+
+  {\Large \reportauthor}
+
+  \vspace{0.25cm}
+  {\large \reportdate}
+
+\end{center}
+\end{titlepage}
+
+\setcounter{page}{1}
+\hypersetup{pageanchor=true}
+
+\section*{Abstract}
+
+Today, many of the most capable language models are accessed through
+centralized platforms. This works well, but discovery, routing, pricing, and
+access often depend on a small number of providers. As personal assistants,
+local models, institutional models, and specialized agents become more
+plausible, a useful question is how distributed AI services could be discovered
+and used without relying on a central registry.
+
+This project introduces DIAL, the Decentralized Intelligence Access Layer, as a
+prototype for decentralized LLM service discovery and routing. DIAL builds a
+peer-to-peer network where nodes can host or access language-model backends,
+advertise capabilities through a Kademlia DHT, exchange richer profiles, and
+route queries to suitable peers. The system also includes HTTP APIs,
+command-line tools, and DIAL Chat, a web interface for interacting with the
+network and observing the routing process.
+
+The evaluation focuses on routing behavior rather than generated answer
+quality. Controlled local benchmarks test different network sizes, latency
+conditions, dropout rates, routing policies, and mixed-capability workloads.
+The results show that capability-aware decentralized routing is feasible in a
+local prototype: clean scenarios complete reliably, mixed-capability queries
+are routed effectively in clean conditions, and selected peers are often close
+to a quality oracle used for analysis. The goal, however, is not only to find
+the single strongest node for every query; a useful decentralized router should
+also avoid fragile traffic concentration. The main limitation is candidate
+visibility: as the
+network grows, or when latency and dropout are introduced, the entry node may
+evaluate too small a part of the active network and tail latency can become
+timeout-heavy. The report therefore treats DIAL as an access-layer foundation
+that could later support broader discovery, load-aware routing, richer
+recommendation search, trust, privacy, incentives, verification, and
+multi-agent collaboration.

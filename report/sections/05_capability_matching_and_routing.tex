@@ -1,0 +1,221 @@
+\section{Capability Matching and Routing}
+
+\subsection{Query Demand and Node Supply}
+
+The routing problem can be described as a matching problem between query demand
+and node supply. Let the set of supported capabilities be
+\[
+  C = \{\text{general}, \text{math}, \text{programming}, \text{writing},
+  \text{summarization}, \text{research}, \text{planning}, \text{creative}\}.
+\]
+
+This set is deliberately compact, not a universal taxonomy of all LLM skills.
+It covers common request families: information seeking, content processing or
+summarization, procedural help, writing or rewriting, coding, quantitative
+reasoning, and creative generation. These families are consistent with
+user-need, instruction-task, and evaluation work
+\citep{shelby2025tuna,wang2022supernaturalinstructions,liang2022helm}. The
+small size also keeps DHT lookup and scoring simple.
+
+A query is represented by a demand vector \(q \in [0,1]^{|C|}\), where
+\(|C|\) is the number of supported capabilities. In normal operation, this
+vector is produced by a capability classifier. In the implementation, it is
+stored as a sparse map: omitted capabilities are treated as zero. The
+classifier uses the user request and returns one to three scored capabilities
+from the fixed set. For example, a simple math query may mostly need math,
+while a prompt such as ``design a creative math puzzle and explain its
+solution'' may need math, creative generation, and writing together.
+
+Each node \(n\) also has capability scores \(s_n\). The value \(s_{n,c}\) means:
+how good node \(n\) is for capability \(c\). The implemented prototype treats
+these scores as part of the node profile; in this prototype, they are configured
+or simulated rather than learned from a full model evaluation.
+
+To compare a node with a query, the router computes a weighted average. For
+each capability, it multiplies how much the query needs that capability by how
+good the node is at it. Capabilities that matter more for the query therefore
+count more in the final score:
+\[
+  Q(n, q) =
+  \frac{\sum_{c \in C} q_c s_{n,c}}{\sum_{c \in C} q_c}.
+\]
+
+The division by \(\sum_{c \in C} q_c\) is a normalization step. The classifier
+scores are treated as demand weights, not necessarily as percentages that
+already sum to 1. Dividing by the total demand keeps \(Q(n,q)\) on the same
+0--1 scale for simple and mixed queries. Without this normalization, a query
+with three requested capabilities could receive a larger score than a
+single-capability query only because more weights were added, not because the
+node is actually a better match.
+
+For example, if a query receives need scores of 0.9 for math and 0.6 for
+writing, and a node scores 0.8 in math and 0.4 in writing, then
+\[
+  Q = \frac{0.9 \times 0.8 + 0.6 \times 0.4}{0.9 + 0.6} = 0.64.
+\]
+The node is therefore a 0.64 capability match for that query. The same formula
+also works when the scores happen to sum to 1; in that case, the denominator is
+1 and the expression reduces to the usual weighted sum.
+
+This score is intentionally simple: interpretable, easy to inspect, and easy to
+extend. It also bridges to richer profile-based routing systems. PPAI-style
+query-agent matching, RouteProfile-style model profiles, and universal routing
+can be viewed as richer alternatives for the same interface
+\citep{wang2026ppai,xu2026routeprofile,jitkrittum2025uniroute}.
+
+The demand vector has two roles. First, its strongest capabilities guide DHT
+discovery: the router searches for peers advertising capabilities that look
+useful for the request. Second, the complete vector is used for scoring. A
+peer found through \texttt{programming}, for example, is still evaluated on the
+full request if the query also needs writing or planning.
+
+\subsection{Candidate Scoring}
+
+The prototype does not rank peers only by raw capability. Routing work shows
+that model selection trades off quality, cost, latency, and confidence
+\citep{chen2023frugalgpt,ong2025routellm,moslem2026dynamicrouting}. Here, the
+``best'' node is the node with the best routing score: capability quality is
+combined with freshness, recent failures, and latency through a configurable
+policy.
+
+\[
+  R(n, q) =
+  \alpha Q(n, q)
+  + \beta F(n)
+  - \gamma E(n)
+  - \delta L(n).
+\]
+
+Here \(F(n)\) is a freshness score, \(E(n)\) represents recent failures, and
+\(L(n)\) represents latency. The weights define a policy. The default
+\texttt{current} policy uses a strong capability weight with equal smaller
+terms for freshness, failures, and latency:
+
+\[
+  R_{\text{current}}(n,q) =
+  0.70Q(n,q) + 0.10F(n) - 0.10E(n) - 0.10L(n).
+\]
+
+Other implemented policies include \texttt{capability\_only},
+\texttt{latency\_aware}, \texttt{reliability\_aware}, and \texttt{balanced}.
+This makes the router a small experimental platform for studying matching
+trade-offs.
+
+The goal is therefore not simply to find the absolute best capability score for
+every query. A node may have a strong model but still be a poor choice if it is
+slow, stale, or often unavailable. Conversely, a suitable local node can score
+well because it avoids network latency. This already helps the system avoid
+pure quality maximization, while future policies can add explicit load and
+request-spreading signals on the same scoring interface.
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}[
+  signal/.style={draw=deepblue, rounded corners=2pt, thick, fill=softblue,
+    align=center, minimum width=2.25cm, minimum height=0.62cm, font=\small},
+  penalty/.style={draw=grayblack, rounded corners=2pt, thick, fill=graybg,
+    align=center, minimum width=2.25cm, minimum height=0.62cm, font=\small},
+  score/.style={draw=epflred, rounded corners=2pt, thick, fill=softred,
+    align=center, minimum width=2.55cm, minimum height=0.72cm, font=\small},
+  arrow/.style={-Latex, thick, color=grayblack}
+]
+\node[signal] (cap) at (0,1.55) {Capability\\quality \(Q\)};
+\node[signal] (fresh) at (0,0.52) {Profile\\freshness \(F\)};
+\node[penalty] (lat) at (0,-0.52) {Latency\\penalty \(L\)};
+\node[penalty] (fail) at (0,-1.55) {Failure\\penalty \(E\)};
+\node[score] (route) at (3.65,0) {Routing\\score \(R\)};
+\node[signal] (select) at (7.1,0) {Selected node\\receives query\\and calls backend};
+
+\draw[arrow] (cap.east) -- ([yshift=0.34cm]route.west);
+\draw[arrow] (fresh.east) -- ([yshift=0.11cm]route.west);
+\draw[arrow] (lat.east) -- ([yshift=-0.11cm]route.west);
+\draw[arrow] (fail.east) -- ([yshift=-0.34cm]route.west);
+\draw[arrow] (route.east) -- (select.west);
+\end{tikzpicture}
+\caption{The implemented routing score is transparent by design: capability is the main signal, while freshness, failures, and latency make operational health visible before the selected node receives the query.}
+\end{figure}
+
+\begin{table}[htbp]
+\centering
+\caption{Routing policies implemented by the prototype.}
+\begin{tabularx}{\textwidth}{lrrrrX}
+\toprule
+\textbf{Policy} & \(\alpha\) & \(\beta\) & \(\gamma\) & \(\delta\) & \textbf{Intent} \\
+\midrule
+current & 0.70 & 0.10 & 0.10 & 0.10 & Prioritize capability while keeping freshness, failures, and latency visible. \\
+capability\_only & 1.00 & 0.00 & 0.00 & 0.00 & Measure pure quality matching without health signals. \\
+latency\_aware & 0.60 & 0.05 & 0.05 & 0.30 & Penalize slower peers more aggressively. \\
+reliability\_aware & 0.60 & 0.05 & 0.30 & 0.05 & Penalize recent failures more aggressively. \\
+balanced & 0.55 & 0.15 & 0.15 & 0.15 & Combine capability with equal freshness, failure, and latency signals. \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\subsection{Routing Algorithm}
+
+Chapter 4 described the architecture components. This subsection describes the
+routing process in more detail: how those components are used by the
+implemented router for one query.
+
+The router follows a staged process. In the implementation, the routing service
+selects a target, then the query service applies that decision by executing
+locally or forwarding the query to the selected peer.
+
+\begin{enumerate}
+  \item Classify the user query into scored capability needs. This is the first
+  LLM-backed step in a normal query: a classifier LLM, guided by a system
+  prompt, maps the request to capability scores. For controlled evaluation, the
+  required capabilities can also be injected directly. The implementation
+  normalizes the result and keeps at most the top three capabilities.
+  \item Query the DHT for providers of the relevant capabilities. The router
+  searches capabilities with demand at least 0.3; if all scores are below this
+  discovery threshold, it still searches the strongest capability.
+  \item Fetch full profiles from the DHT providers and store or update them in
+  the peer registry.
+  \item Build the pre-recommendation candidate set from the local node and
+  available registry profiles that match at least one requested capability. In a
+  fresh run, these profiles mostly come from the current DHT lookup; over time,
+  the registry can also contain profiles learned earlier. All candidates are
+  scored again for the current query.
+  \item If the best pre-recommendation candidate has a routing score of at least
+  0.65, select it as the target.
+  \item Otherwise, ask eligible remote candidates for recommendations. These
+  recommendations expand the candidate set; recommended peers are then evaluated
+  with the same routing score.
+  \item If no candidate reaches 0.65, fall back to the best candidate seen. If
+  no candidate was found at all and the original query did not already include
+  \texttt{general}, retry discovery once with the general capability. If this
+  retry also finds nothing, return \texttt{no\_suitable\_node}.
+  \item Deliver the query to the selected target. If the target is the entry
+  node itself, the query is executed locally. If the target is remote, the entry
+  node opens a query protocol stream and sends the prompt, query identifier, and
+  capability context to that peer.
+  \item Generate and return the answer. This is the second LLM-backed step in a
+  normal query: the selected node calls its bound answer backend, returns the
+  answer to the entry node if needed, and the entry node returns it to the user.
+\end{enumerate}
+
+The 0.3 discovery threshold is used only to decide which capabilities should be
+searched in the DHT. It avoids querying the DHT for very weak capability hints,
+while the strongest capability is still searched if all scores are below 0.3.
+The 0.65 routing threshold is a practical cutoff: high enough to avoid accepting
+a weak pre-recommendation candidate immediately, but low enough to keep the
+router from asking for recommendations too often. These values were chosen
+empirically for this prototype and are exposed in the routing trace, together
+with whether the selected peer came from the first candidate pool,
+recommendations, or fallback selection.
+
+Forwarding is intentionally not recursive. When a selected remote node receives
+a forwarded query, it answers with its own backend instead of running the whole
+routing process again. This avoids routing loops and unbounded delegation. If
+forwarding fails, the entry node can exclude that peer and ask the router for
+another target, but forwarding attempts are capped.
+
+\subsection{Scope of the Current Router}
+
+The implemented router is intentionally a single-executor router. For one user
+request, it chooses one target node, sends the query there if needed, and returns
+one answer. It does not yet split a task across several nodes, aggregate several
+answers, use reputation, price, or privacy constraints, or optimize global
+network load. Those extensions fit the same matching interface, but they belong
+to the future-work layer rather than the current routing algorithm.

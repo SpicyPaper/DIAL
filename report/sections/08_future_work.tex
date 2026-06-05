@@ -1,0 +1,289 @@
+\section{Future Work}
+
+DIAL currently implements the core path: nodes advertise capabilities, discover
+peers, route queries, and return answers through the selected node. Future work
+can improve this prototype in two ways. Some directions address limits observed
+during evaluation, such as candidate visibility, timeout-heavy failures, and
+policy comparison. Others extend the project toward a richer decentralized AI
+system, with several nodes working together, better trust signals, privacy
+constraints, and incentives for open participation. The ideas below are
+therefore both practical improvements to the current prototype and possible
+extensions of the broader DIAL vision.
+
+\subsection{Multi-Node Query Execution}
+
+The current router selects one node. A natural extension is multi-node
+execution, where a request can involve several specialized peers. One version
+is top-\(k\) execution: send the same query to several high-ranking nodes, then
+aggregate the answers. Another version is staged execution: route a request
+through a small sequence of nodes, for example planning first, then coding,
+then writing or verification. This could improve robustness and quality in
+several ways:
+
+\begin{itemize}
+  \item compare answers and select the most consistent one;
+  \item ask answer evaluator nodes to rate responses;
+  \item combine specialized answers, for example one math model and one writing
+  model;
+  \item retry automatically when one selected peer times out;
+  \item expose answer diversity to the user.
+\end{itemize}
+
+Multi-node execution fits the decentralized direction. A network of smaller
+specialized models may be more useful than one local model when their strengths
+are complementary. The trade-off is coordination cost: more nodes can improve
+quality or robustness, but they also add latency and failure points. This
+connects to LLM-Blender and Mixture-of-Agents, which show that ranking, fusing,
+or layering multiple model outputs can improve quality
+\citep{jiang2023llmblender,wang2024mixtureofagents}.
+
+\subsection{Aggregation and Answer Evaluation}
+
+Once several nodes answer, the system needs aggregation. Aggregator nodes could
+be regular DIAL nodes whose role is to fuse several responses into one final
+answer. They could select the strongest parts of each answer, remove
+contradictions, summarize long responses, or produce a final response with
+citations and confidence notes.
+
+The network may also need answer evaluator nodes. Their role would be different
+from capability evaluators: instead of estimating whether a node is generally
+good at math or writing, they would judge whether a specific answer was useful,
+correct, complete, or well-grounded. This could happen during multi-node
+execution, or periodically as a quality check to see whether selected nodes are
+still producing good answers. Verifier-based systems such as LLM-as-a-Verifier
+are relevant because they turn answer checking into a reusable component
+\citep{kwok2026llmverifier}.
+
+This creates a new routing problem: the best set of nodes is not always the top
+\(k\) individually. The router may want diversity across capabilities, model
+families, latency classes, trust domains, and node roles. Matching then becomes
+a problem of choosing a good group of answer nodes, evaluator nodes, and
+possibly an aggregator node.
+
+\subsection{Capability Profile Calibration}
+
+The current prototype assigns capability profiles from configured or simulated
+scores. A stronger system should learn these profiles from evidence. Each node
+could periodically answer a small evaluation suite covering math, programming,
+writing, summarization, research, planning, creative tasks, and general
+questions. Existing work on user-need taxonomies and language-model evaluation
+could help design such a suite without reducing capability to one global score
+\citep{shelby2025tuna,liang2022helm}. The results could be graded by tests,
+human feedback, or verifier models, then used to update the node profile over
+time.
+
+This could be handled by capability evaluator nodes: regular DIAL nodes whose
+task is to test other nodes and publish signed or local evaluation results. It
+would make advertised capabilities less dependent on manual role hints or
+self-declared profiles. It would also give reputation a better input: routing
+could learn not only whether a node is reachable, but whether it actually
+performs well on the tasks it claims to support.
+
+\subsection{Reputation}
+
+Reputation could measure whether a node is useful over time. Signals include
+uptime, latency, successful completion, user feedback, verifier scores, and
+consistency with other nodes. A first implementation can maintain local scores;
+later versions can publish signed reputation events or use verifiable logs.
+
+Reputation is also a defense mechanism. In an open network, nodes may advertise
+capabilities they do not have. Routing should learn from observed behavior
+rather than trust advertisements blindly. Verifiable inference mechanisms such
+as VeriLLM point toward stronger versions, where selected execution claims can
+be checked publicly
+\citep{wang2026verillm}.
+
+\subsection{Incentives and Pricing}
+
+If the network becomes a market, providers need incentives. A future
+\texttt{NodeProfile} could include price metadata such as
+\texttt{price\_per\_query}, accepted payment methods, free quotas, or priority
+fees. Routing could then include cost in the matching objective, instead of
+choosing only by capability and operational health.
+
+Blockchain or payment-channel mechanisms become relevant here. The discovery
+plane can remain peer-to-peer, while the payment layer records payments,
+escrows, staking, or rewards. This keeps the architecture close to BitTorrent's
+lesson: incentives help open networks stay robust, but should serve the
+resource exchange rather than replace discovery \citep{cohen2003bittorrent}.
+It also fits the broader PPAI direction, where matching requests to providers
+can include more than technical capability, such as cost and participation
+rules \citep{wang2026ppai}.
+
+\subsection{Faster Failure Detection}
+
+The dropout and high-latency benchmarks show that failure handling still needs
+work. The prototype often still returns an answer when many peers disappear,
+which is a good sign, but weaker candidate visibility and slow failed paths
+reduce quality and increase tail latency. Future versions could add:
+
+\begin{itemize}
+  \item shorter adaptive timeouts based on recent latency;
+  \item profile expiration and explicit unavailability propagation;
+  \item background health checks;
+  \item multiple candidate reservations before forwarding;
+  \item fallback to local execution when remote confidence is low.
+\end{itemize}
+
+These changes would likely improve quality and p95 latency when peers are
+slow, stale, or unavailable. They also align with agent-discovery work that
+treats service readiness and changing peer availability as separate but
+interacting discovery problems
+\citep{dazzi2026usableagentdiscovery,guo2026agentdiscovery}.
+
+\subsection{Load-Aware Request Spreading}
+
+The current policy framework can compare capability quality, freshness,
+failures, and latency, but it does not yet include an explicit load-balancing
+term. In a larger network, this matters because the best node on paper should
+not necessarily receive every request. If too many users choose the same strong
+peer, that peer may become slower or unavailable, while other good-enough peers
+remain unused.
+
+A future router could therefore track simple load signals, such as recent
+selections, active requests, queue length, or provider-declared capacity. The
+router would still prefer capable nodes, but it could spread requests across
+several suitable peers instead of always selecting the highest score. This fits
+the PPAI idea of matching requests to providers under several constraints:
+quality matters, but so do availability, cost, trust, and network health
+\citep{wang2026ppai}. Existing routing systems such as RouteLLM and the vLLM
+Semantic Router also support this view of routing as a policy decision over
+multiple signals, even if they do not target the same peer-to-peer setting
+\citep{ong2025routellm,vllmsemanticrouter2026}.
+
+\subsection{Discovery Coverage and Adaptive Recommendations}
+
+The evaluation suggests that several weaknesses come from limited candidate
+visibility. A first improvement direction is therefore to tune the discovery
+layer itself: DHT provider lookup breadth, provider refresh timing, profile
+refresh behavior, bootstrap warmup, and how many providers are kept per
+capability. These are engineering parameters rather than new research ideas,
+but they matter because the router can only score candidates it has discovered.
+
+The current recommendation mechanism is also conservative. The entry node
+refreshes its candidate pool through the DHT, asks a few eligible peers for
+recommendations when needed, and stops. This keeps routing predictable, but it
+also makes discovery shallow. In a larger or uneven network, useful nodes may
+be beyond the peers initially found by the DHT or known by the entry node.
+This matters especially for mixed-capability queries, where the scoring formula
+needs enough candidates across several capabilities before it can make a good
+trade-off.
+
+A future router could use adaptive multi-hop recommendation expansion. When
+candidate quality is low, the score gap is small, or the entry node has too
+few good options, it could ask recommended peers for their own recommendations.
+The goal would be to discover further into the network without turning routing
+into an uncontrolled search. The expansion should remain bounded:
+
+\begin{itemize}
+  \item set a maximum hop depth, for example two or three recommendation hops;
+  \item set a total recommendation budget per query;
+  \item stop early when a reachable candidate passes the routing threshold;
+  \item stop when new hops return mostly duplicates or already failed peers;
+  \item penalize longer-path candidates unless their profile is clearly better;
+  \item cache useful paths briefly, but expire them aggressively when peers
+  change or disappear.
+\end{itemize}
+
+This trades extra discovery cost for a wider view of the network when one-hop
+routing is not enough. It is a middle ground between shallow DHT lookup and
+uncontrolled flooding: discovery can expand when useful, but still remains
+bounded.
+
+\subsection{Privacy-Aware Routing and Trust Domains}
+
+Not all queries should be routed to any peer. Some prompts contain private,
+institutional, or regulated information. The matching model can support trust
+constraints: route only to local peers, known identities, institutional peers,
+or peers with a privacy policy. This makes privacy a routing decision: some
+tasks may stay inside a trusted boundary, while less sensitive tasks may use a
+broader public network.
+
+Privacy is harder in a public peer-to-peer network. DIAL should not assume that
+a raw prompt remains private once it is sent to an unknown execution node. The
+current design limits exposure during discovery: DHT lookup and recommendations
+exchange capabilities, profiles, and peer IDs, while the prompt is sent only to
+the selected node for execution. Still, the entry node and selected node can see
+the prompt.
+
+This also opens the possibility of private or hybrid DIAL networks. An
+individual, lab, or organization could run a small private network of local
+specialized nodes instead of relying on one large centralized model. Such a
+network could keep sensitive prompts inside a trusted boundary while still
+benefiting from specialization and aggregation. A hybrid version could route
+private tasks locally and use a broader public network only when policy allows
+it. This may improve privacy, specialization, and robustness, but it would need
+careful policies to avoid unnecessary latency or leakage. This is consistent
+with distributed inference systems such as Petals, where shared compute is
+useful but privacy remains an important deployment concern
+\citep{borzunov2023petals}.
+
+A future version could make this explicit with privacy modes such as
+\texttt{local-only}, \texttt{trusted-only}, \texttt{institutional}, or
+\texttt{public}. It could also reduce exposure by classifying locally before
+discovery, routing on capability metadata, redacting sensitive fields when
+possible, or sending only non-sensitive sub-tasks to public peers. More advanced
+approaches, such as privacy-preserving routing or privacy-preserving
+decentralized serving, are explored by PPRoute and PlanetServe
+\citep{wu2026privacyrouting,fang2026planetserve}. These approaches show that
+privacy can be a design direction for decentralized LLM routing, but it is not
+automatic and usually adds protocol or infrastructure cost.
+
+\subsection{Security and Identity}
+
+A future open network would need stronger identity guarantees than the current
+local prototype. Today, a node can publish a profile saying which capabilities
+it offers, but the prototype does not verify that this profile was signed by a
+stable identity or that the same actor is not creating many disposable nodes.
+This matters because reputation, payment, and capability evaluation only work
+if the network can attach past behavior to a persistent node identity.
+
+A stronger design could require signed profiles, timestamps or freshness
+checks, and a clearer binding between a peer ID, public key, and advertised
+profile. It could also make fake or duplicated node identities harder to use,
+for example by linking reputation to longer-lived identities or requiring some
+form of verification before a node is trusted for sensitive or paid work. The
+lightweight discovery layer should therefore be paired with stronger
+authentication beyond local experiments. Lattica's cross-NAT focus is relevant
+because an open network cannot assume that all peers are directly reachable
+\citep{yang2025lattica}.
+
+\subsection{Richer Matching Algorithms}
+
+The current vector model is deliberately simple. A later router could replace
+the current score with a broader utility objective:
+
+\[
+  U(n,q) =
+  w_q Q(n,q) + w_r Rep(n) - w_p Price(n) - w_l Latency(n) - w_\rho Risk(n).
+\]
+
+This would let the system choose, for example, a cheaper node above a quality
+threshold, a high-reputation node for sensitive requests, or a diverse group of
+nodes when aggregation is useful. Future matching can also use:
+
+\begin{itemize}
+  \item semantic embeddings of queries and model descriptions;
+  \item learned routing from historical outcomes;
+  \item load-aware and energy-aware scheduling;
+  \item price-quality trade-off curves;
+  \item task decomposition across multiple specialist nodes;
+  \item user-specific preferences for speed, quality, privacy, or cost.
+\end{itemize}
+
+This is where the project connects most strongly to PPAI. The network does not
+need to hard-code one matching algorithm; it can expose data and interfaces
+for competing policies. PPAI, UniRoute, RouteProfile, and vLLM Semantic Router
+suggest richer ways to represent tasks, models, policies, and constraints
+\citep{wang2026ppai,jitkrittum2025uniroute,xu2026routeprofile,vllmsemanticrouter2026}.
+
+\subsection{Beyond the Prototype}
+
+If DIAL were extended beyond the current prototype, the natural order would be
+to make the network more reliable, add trust and reputation so routing can
+learn from experience, and then make participation more attractive for people
+or organizations that run useful nodes. Incentives for providers could mean
+visibility for reliable nodes, priority rules, credits, payments, or other
+rewards for sharing compute and specialized models. A later system would look
+less like a single application and more like an open protocol for AI service
+exchange.
